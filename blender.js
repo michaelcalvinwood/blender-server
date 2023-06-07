@@ -185,7 +185,8 @@ const processMix = async (mix, socket) => {
 
   console.log('mix', mix);
 
-
+  let chunks = nlp.getTokenChunks(mix.content[0].text);
+  
   /*
    * split large texts into separated contents
    * contents is an array

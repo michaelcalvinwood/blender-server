@@ -16,6 +16,52 @@ exports.numGpt3Tokens = text => {
     return encoded.length;
 } 
 
+exports.getTokenChunks = (text, maxTokens = 2000, overlap = 500) => {
+    const chunks = [];
+    let sentences = exports.getSentences(text);
+    sentences = sentences.map(sentence => {
+        return {
+            sentence,
+            numTokens: exports.numGpt3Tokens(sentence)
+        }
+    })
+
+    const overlapCount = maxTokens - overlap;
+
+    let startIndex = 0;
+    let overlapIndex = -1;
+    let count = 0;
+    let curChunk = [];
+
+    for (let i = 0; i < sentences.length; ++i) {
+        count += sentences[i].numTokens;
+
+        if (count > overlapCount && overlapIndex === -1) overlapIndex = i - 1 > startIndex ? i - 1 : startIndex + 1;
+        if (count < maxTokens) {
+            curChunk.push(sentences[i].sentence);
+        } else {
+            chunks.push(curChunk.join(' '));
+            curChunk = [];
+            count = 0;
+            startIndex = overlapIndex - 1;
+            console.log('startIndex', startIndex);
+            i = startIndex;
+            overlapIndex = -1;
+        }
+    }
+
+    if (curChunk.length) chunks.push(curChunk.join(' '));
+
+    console.log('chunks', chunks.length);
+
+    for (let i = 0; i < chunks.length; ++i) {
+        console.log(`chunk[${i}]: ${exports.numGpt3Tokens(chunks[i])}`);
+    }
+
+    console.log('chunks[0]', chunks[0])
+
+}
+
 
 const test = () => {
     let tokens = exports.numGpt3Tokens('Hello Werld');
