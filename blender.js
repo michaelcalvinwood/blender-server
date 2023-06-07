@@ -29,6 +29,7 @@ const extractUrlText = async (mix, index) => {
     case 'html':
       const html = await urlUtils.getHTML(url);
       const article = await urlUtils.extractArticleFromHTML(html);
+      mix.content[index].html = article;
       /*
        * TODO: If article === false email Michael with URL
        */
@@ -64,6 +65,8 @@ const processMix = async (mix, socket) => {
   socket.emit('msg', {status: 'success', msg: 'Extracting text'});
 
   await extractText(mix);
+
+  socket.emit('text', mix.content);
 
 }
 

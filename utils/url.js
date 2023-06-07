@@ -43,7 +43,7 @@ exports.extractArticleFromHTML = async (html, url = '') => {
 
     if (article && article.title && article.content) return `<h1>${article.title}</h1>\n${article.content}`;
 
-    return false;
+    return '';
 }
 
 exports.getTextFromHTML = html => {
