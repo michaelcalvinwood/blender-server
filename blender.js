@@ -10,10 +10,14 @@ const cors = require('cors');
 const fs = require('fs');
 const socketio = require('socket.io');
 const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
+
 
 const urlUtils = require('./utils/url');
 const wp = require('./utils/wordpress');
 const ai = require('./utils/ai');
+const convert = require('./utils/conversion');
+const nlp = require('./utils/nlp');
 
 const app = express();
 app.use(express.static('public'));
@@ -67,6 +71,20 @@ const extractUrlText = async (mix, index) => {
 
       console.log('article', article);
       break;
+    case 'docx':
+      const fileName = `/home/tmp/${uuidv4()}.docx`;
+      try {
+        await urlUtils.download(url, fileName);
+        let html = await convert.convertDocxToHTML(fileName);
+        console.log('Got initial html');
+        html = convert.removeImagesAndTablesFromHTML(html);
+        const text = urlUtils.getTextFromHTML(html);
+        mix.content[index].text = text;
+      } catch (err) {
+        console.error(err);
+        mix.content[index].text = '';
+      }
+      break;
     default:
       console.error('unknown urlType', urlType);
       mix.content[index].text = '';
@@ -107,18 +125,18 @@ const extractSummaries = async (mix) => {
 
   for (let i = 0; i < mix.content.length; ++i) {
     let info = mix.content[i].text;
-    console.log('info', info);
+    
     if (!info) {
       mix.content[i].summary = null;
       continue;
     }
 
     if (mix.topic) {
-      prompt = `"""Below is some Info. Provide a detailed summary of the info as it relates to the following topic: ${mix.topic}. The summary must solely include information related to that topic. 
+      prompt = `"""Below is some Info. Provide an extremely detailed summary of the info as it relates to the following topic: ${mix.topic}. The summary must solely include information related to that topic. 
       Also return a list of third-party quotes that are related to the following topic: ${mix.topic}.
       Also return a list of the three most pertinent facts that are related to the following topic: ${mix.topic}.
       The return format must be stringified JSON in the following format: {
-        summary: the detailed summary goes here, or "unrelated" goes here if none of the info is related to the topic: ${mix.topic},
+        summary: the extremely detailed summary goes here, or "unrelated" goes here if none of the info is related to the topic: ${mix.topic},
         quotes: {
           speaker: the identity of the speaker goes here,
           quote: the speaker's quote goes here
@@ -129,16 +147,26 @@ const extractSummaries = async (mix) => {
       Info:
       ${info}"""
       `
-
-      /*
-       * Check prompt tokens
-       */
-      console.log('prompt', prompt);
-      promises.push(chatJSON(mix, i, prompt));
-      
     } else {
-
+      prompt = `"""Below is some Info. Provide an extremely detailed summary of the facts contained in the info.
+      Also return a list of third-party quotes that are included in the info.
+      Also return a list of the three most pertinent facts from the info.
+      The return format must be stringified JSON in the following format: {
+        summary: the extremely detailed summary goes here,
+        quotes: {
+          speaker: the identity of the speaker goes here,
+          quote: the speaker's quote goes here
+        },
+        facts: array of the three pertinent facts goes here
+      }
+      
+      Info:
+      ${info}"""
+      `
     }
+
+    console.log('prompt', prompt);
+    promises.push(chatJSON(mix, i, prompt));
   }
 
   const results = await Promise.all(promises);
@@ -154,6 +182,18 @@ const processMix = async (mix, socket) => {
   socket.emit('msg', {status: 'success', msg: 'Received contents'});
 
   await extractText(mix);
+
+  console.log('mix', mix);
+
+
+  /*
+   * split large texts into separated contents
+   * contents is an array
+   * summaries are an array
+   */
+
+  return;
+
 
   socket.emit('text', mix.content);
   socket.emit('msg', {status: 'success', msg: 'Extracted text'});

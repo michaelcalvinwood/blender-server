@@ -2,6 +2,7 @@ require('dotenv').config();
 const axios = require('axios');
 const cheerio = require('cheerio');
 const articleExtractor = require('@extractus/article-extractor');
+const fs = require('fs');
 
 const { convert } = require('html-to-text');
 
