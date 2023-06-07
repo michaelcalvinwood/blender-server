@@ -51,7 +51,9 @@ app.get('/', (req, res) => {
 const extractUrlText = async (mix, index) => {
   const url = mix.content[index].url;
 
-  const urlType = 'html';  // later add function here to get the type
+  const urlType = urlUtils.urlType(url);  // later add function here to get the type
+
+  console.log('urlType', urlType);
 
   switch (urlType) {
     case 'html':
@@ -65,7 +67,11 @@ const extractUrlText = async (mix, index) => {
 
       console.log('article', article);
       break;
+    default:
+      console.error('unknown urlType', urlType);
+      mix.content[index].text = '';
     }
+      
 }
 
 const extractText = async mix => {
@@ -141,23 +147,26 @@ const extractSummaries = async (mix) => {
   return;
 }
 
+
+
 const processMix = async (mix, socket) => {
   
   socket.emit('msg', {status: 'success', msg: 'Received contents'});
 
   await extractText(mix);
 
+  socket.emit('text', mix.content);
   socket.emit('msg', {status: 'success', msg: 'Extracted text'});
 
   await extractSummaries(mix);
 
-  // get summaries
+  socket.emit('summary', mix.content);
+  socket.emit('msg', {status: 'success', msg: 'Extracted summaries'});
 
-    // with quotes?
+  // await writeArticle(mix);
 
-    // with essential facts stated by the author of the article
-
-  socket.emit('text', mix.content);
+  // socket.emit('article', mix.content);
+  // socket.emit('msg', {status: 'success', msg: 'Final Article'});
 
 }
 

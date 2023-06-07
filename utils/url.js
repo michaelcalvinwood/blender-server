@@ -9,6 +9,20 @@ const { SCRAPERAPI_KEY } = process.env;
 
 //const url = 'https://www.pymnts.com/news/retail/2023/will-consumers-pay-50-for-drugstore-brand-sunscreen/';
 
+exports.urlType = url => {
+    console.log('urlType', url);
+
+    const base = url.substring(url.lastIndexOf('/')+1);
+
+    const loc = base.lastIndexOf('.');
+
+    if (loc === -1) return 'html';
+
+    const extension = base.substring(loc+1).toLowerCase();
+
+    return extension;
+}
+
 exports.getHTML = async url => {
   let request = {
       url: 'http://api.scraperapi.com',
@@ -106,3 +120,26 @@ exports.isUrl = url => {
 
 
 
+exports.download = async (url, filePath) => {  
+  return new Promise(async (resolve, reject) => {
+      const writer = fs.createWriteStream(filePath)
+  
+      let response;
+
+      try {
+          response = await axios({
+          url,
+          method: 'GET',
+          responseType: 'stream'
+          })
+      } catch (e) {
+          console.error(e);
+          reject(e);
+          return false;
+      }
+      response.data.pipe(writer)
+
+      writer.on('finish', resolve)
+      writer.on('error', reject)
+  })
+}
