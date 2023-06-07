@@ -1,0 +1,11 @@
+{
+  "name": "blender-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "blender.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Michael Wood",
+  "license": "SEE LICENSE IN license.md"
+}
