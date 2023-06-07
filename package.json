@@ -9,8 +9,13 @@
   "author": "Michael Wood",
   "license": "SEE LICENSE IN license.md",
   "dependencies": {
+    "@extractus/article-extractor": "^7.2.16",
+    "axios": "^1.4.0",
+    "cheerio": "^1.0.0-rc.12",
     "cors": "^2.8.5",
+    "dotenv": "^16.1.4",
     "express": "^4.18.2",
+    "html-to-text": "^9.0.5",
     "https": "^1.0.0",
     "socket.io": "^4.6.2"
   }

@@ -9,6 +9,8 @@ const cors = require('cors');
 const fs = require('fs');
 const socketio = require('socket.io');
 
+const urlUtils = require('./utils/url');
+
 const app = express();
 app.use(express.static('public'));
 app.use(express.json({limit: '200mb'})); 
@@ -18,15 +20,48 @@ app.get('/', (req, res) => {
     res.send('Hello, World!');
 });
 
+const extractUrlText = async (mix, index) => {
+  const url = mix.content[index].url;
 
-const processMix = async (info, socket) => {
-  const {mix, topic, output } = info;
-  socket.emit('msg', {status: 'success', msg: 'received contents'});
+  const urlType = 'html';  // later add function here to get the type
+
+  switch (urlType) {
+    case 'html':
+      const html = await urlUtils.getHTML(url);
+      console.log(html);
+    }
+}
+
+const extractText = async mix => {
+  console.log('mix', JSON.stringify(mix, null, 4));
+  const promises = [];
+
+  for (let i = 0; i < mix.content.length; ++i) {
+    switch (mix.content[i].type) {
+      case 'url':
+        promises.push(extractUrlText(mix, i));
+      default:
+        console.error('extractText unknown type', mix.content[i].type);
+        mix.content[i].text = '';
+    }
+  }
+
+  await Promise.all(promises);
+  return;
+}
+
+const processMix = async (mix, socket) => {
+  
+  socket.emit('msg', {status: 'success', msg: 'Received contents'});
+
+  socket.emit('msg', {status: 'success', msg: 'Extracting text'});
+
+  await extractText(mix);
 
 }
 
 const handleSocketEvents = async socket => {
-  socket.on('mix', (info) => processMix(info, socket))
+  socket.on('mix', (mix) => processMix(mix, socket))
 }
 
 const httpsServer = https.createServer({
