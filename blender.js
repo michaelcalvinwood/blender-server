@@ -3,22 +3,49 @@ const hostname = 'blender.pymnts.com'
 const privateKeyPath = `/etc/letsencrypt/live/${hostname}/privkey.pem`;
 const fullchainPath = `/etc/letsencrypt/live/${hostname}/fullchain.pem`;
 
+require('dotenv').config();
 const express = require('express');
 const https = require('https');
 const cors = require('cors');
 const fs = require('fs');
 const socketio = require('socket.io');
+const jwt = require('jsonwebtoken');
 
 const urlUtils = require('./utils/url');
+const wp = require('./utils/wordpress');
 
 const app = express();
 app.use(express.static('public'));
 app.use(express.json({limit: '200mb'})); 
 app.use(cors());
 
+/*
+ * REST API Functions
+ */
+
+const handleLogin = async (req, res) => {
+  const {username, password} = req.body;
+
+  if (!username || !password) return res.status(400).json('bad request');
+
+  const result = await wp.getJWT(username, password);
+
+  if (result === false)  return res.status(401).json('invalid credentials');
+  
+  let token = jwt.sign({result}, process.env.JWT_SECRET, {expiresIn: '3h'});
+
+  res.status(200).json(token);
+}
+
+app.post('/login', (req, res) => handleLogin(req, res));
+
 app.get('/', (req, res) => {
     res.send('Hello, World!');
 });
+
+/*
+ * Socket Functions
+ */
 
 const extractUrlText = async (mix, index) => {
   const url = mix.content[index].url;
@@ -62,9 +89,11 @@ const processMix = async (mix, socket) => {
   
   socket.emit('msg', {status: 'success', msg: 'Received contents'});
 
-  socket.emit('msg', {status: 'success', msg: 'Extracting text'});
-
   await extractText(mix);
+
+  socket.emit('msg', {status: 'success', msg: 'Extracted text'});
+
+
 
   socket.emit('text', mix.content);
 
