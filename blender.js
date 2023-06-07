@@ -28,7 +28,13 @@ const extractUrlText = async (mix, index) => {
   switch (urlType) {
     case 'html':
       const html = await urlUtils.getHTML(url);
-      console.log(html);
+      const article = await urlUtils.extractArticleFromHTML(html);
+      /*
+       * TODO: If article === false email Michael with URL
+       */
+
+      console.log('article', article);
+      break;
     }
 }
 
@@ -40,6 +46,7 @@ const extractText = async mix => {
     switch (mix.content[i].type) {
       case 'url':
         promises.push(extractUrlText(mix, i));
+        break;
       default:
         console.error('extractText unknown type', mix.content[i].type);
         mix.content[i].text = '';

@@ -34,6 +34,18 @@ exports.getHTML = async url => {
     return response.data;
 }
 
+exports.extractArticleFromHTML = async (html, url = '') => {
+
+    let article;
+    
+    if (url) article =  await articleExtractor.extractFromHtml(html, url);
+    else article = await articleExtractor.extractFromHtml(html);
+
+    if (article && article.title && article.content) return `<h1>${article.title}</h1>\n${article.content}`;
+
+    return false;
+}
+
 exports.getTextFromHTML = html => {
   const options = {
       selectors: [
