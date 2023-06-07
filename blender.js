@@ -13,6 +13,7 @@ const jwt = require('jsonwebtoken');
 
 const urlUtils = require('./utils/url');
 const wp = require('./utils/wordpress');
+const ai = require('./utils/ai');
 
 const app = express();
 app.use(express.static('public'));
@@ -56,7 +57,8 @@ const extractUrlText = async (mix, index) => {
     case 'html':
       const html = await urlUtils.getHTML(url);
       const article = await urlUtils.extractArticleFromHTML(html);
-      mix.content[index].html = article;
+      const text = urlUtils.getTextFromHTML(article);
+      mix.content[index].text = text;
       /*
        * TODO: If article === false email Michael with URL
        */
@@ -85,6 +87,60 @@ const extractText = async mix => {
   return;
 }
 
+const chatJSON = async (mix, index, prompt, temperature = .4) => {
+  mix.content[index].summary = await ai.getChatJSON(prompt, temperature);
+  console.log('summary', mix.content[index].summary);
+}
+
+const extractSummaries = async (mix) => {
+  console.log('mix.topic', mix.topic);
+
+  const promises = [];
+
+  let prompt;
+
+  for (let i = 0; i < mix.content.length; ++i) {
+    let info = mix.content[i].text;
+    console.log('info', info);
+    if (!info) {
+      mix.content[i].summary = null;
+      continue;
+    }
+
+    if (mix.topic) {
+      prompt = `"""Below is some Info. Provide a detailed summary of the info as it relates to the following topic: ${mix.topic}. The summary must solely include information related to that topic. 
+      Also return a list of third-party quotes that are related to the following topic: ${mix.topic}.
+      Also return a list of the three most pertinent facts that are related to the following topic: ${mix.topic}.
+      The return format must be stringified JSON in the following format: {
+        summary: the detailed summary goes here, or "unrelated" goes here if none of the info is related to the topic: ${mix.topic},
+        quotes: {
+          speaker: the identity of the speaker goes here,
+          quote: the speaker's quote goes here
+        },
+        facts: array of the three pertinent facts goes here
+      }
+      
+      Info:
+      ${info}"""
+      `
+
+      /*
+       * Check prompt tokens
+       */
+      console.log('prompt', prompt);
+      promises.push(chatJSON(mix, i, prompt));
+      
+    } else {
+
+    }
+  }
+
+  const results = await Promise.all(promises);
+  console.log('results', results);
+  
+  return;
+}
+
 const processMix = async (mix, socket) => {
   
   socket.emit('msg', {status: 'success', msg: 'Received contents'});
@@ -93,7 +149,13 @@ const processMix = async (mix, socket) => {
 
   socket.emit('msg', {status: 'success', msg: 'Extracted text'});
 
+  await extractSummaries(mix);
 
+  // get summaries
+
+    // with quotes?
+
+    // with essential facts stated by the author of the article
 
   socket.emit('text', mix.content);
 
@@ -138,5 +200,3 @@ io.on('connection', (socket) => {
   //   socket.broadcast.emit('event', name + ' says hello!');
   // });
 });
-
-
