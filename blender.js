@@ -19,12 +19,14 @@ app.get('/', (req, res) => {
 });
 
 
-const processMix = async (mix, socket) => {
-  console.log('mix', mix);
+const processMix = async (info, socket) => {
+  const {mix, topic, output } = info;
+  socket.emit('msg', {status: 'success', msg: 'received contents'});
+
 }
 
 const handleSocketEvents = async socket => {
-  socket.on('mix', (mix) => processMix(mix, socket))
+  socket.on('mix', (info) => processMix(info, socket))
 }
 
 const httpsServer = https.createServer({
