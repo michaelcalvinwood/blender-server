@@ -21,6 +21,7 @@
     "jsonwebtoken": "^9.0.0",
     "mammoth": "^1.6.0",
     "openai": "^3.2.1",
+    "pdf-parse": "^1.1.1",
     "socket.io": "^4.6.2",
     "uuid": "^9.0.0",
     "wink-eng-lite-web-model": "^1.5.0",

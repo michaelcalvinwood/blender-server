@@ -1,7 +1,22 @@
 
 var mammoth = require("mammoth");
 const cheerio = require ('cheerio');
+const pdf = require('pdf-parse');
+const fs = require('fs');
 
+exports.convertPdfToText = async fileName => {
+    let dataBuffer = fs.readFileSync(fileName);
+ 
+    let data;
+    try {
+        data = await pdf(dataBuffer);    
+        return data.text;
+    } catch (err) {
+        console.error(err);
+        return '';
+
+    }
+}
 
 exports.convertDocxToHTML = async fileName => {
     let result;

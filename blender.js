@@ -58,7 +58,7 @@ const extractUrlText = async (mix, index) => {
   const urlType = urlUtils.urlType(url);  // later add function here to get the type
 
   console.log('urlType', urlType);
-  let text;
+  let text, fileName;
 
   switch (urlType) {
     case 'html':
@@ -72,7 +72,7 @@ const extractUrlText = async (mix, index) => {
       console.log('article', article);
       break;
     case 'docx':
-      const fileName = `/home/tmp/${uuidv4()}.docx`;
+      fileName = `/home/tmp/${uuidv4()}.docx`;
       try {
         await urlUtils.download(url, fileName);
         let html = await convert.convertDocxToHTML(fileName);
@@ -85,6 +85,18 @@ const extractUrlText = async (mix, index) => {
         text = '';
       }
       break;
+      case 'pdf':
+        fileName = `/home/tmp/${uuidv4()}.pdf`;
+        try {
+          await urlUtils.download(url, fileName);
+          text = await convert.convertPdfToText(fileName);
+          console.log('pdf text', text);
+          
+        } catch (err) {
+          console.error(err);
+          text = '';
+        }
+        break;
     default:
       console.error('unknown urlType', urlType);
       text = '';
@@ -146,18 +158,18 @@ const getInfo = async (mix, i, j) => {
     mix.content[i].info[j] = await ai.getChatJSON(prompt);
     mix.content[i].info[j].info = mix.content[i].info[j].info.join(" ");
   } else {
-    const lines = info.split("\n");
-    const sentences = [];
-    lines.forEach(line => {
-      const candidates = nlp.getSentences(line);
-      for (let i = 0; i < candidates.length; ++i) {
-        const trimmed = candidates[i].trim();
-        if (trimmed.endsWith('.') || trimmed.endsWith(':') || trimmed.endsWith('.')) sentences.push(trimmed);
-      }
-    })
+    // const lines = info.split("\n");
+    // const sentences = [];
+    // lines.forEach(line => {
+    //   const candidates = nlp.getSentences(line);
+    //   for (let i = 0; i < candidates.length; ++i) {
+    //     const trimmed = candidates[i].trim();
+    //     if (trimmed.endsWith('.') || trimmed.endsWith(':') || trimmed.endsWith('.')) sentences.push(trimmed);
+    //   }
+    // })
 
-    info = sentences.join(' ');
-    console.log("INFO", info);
+    // info = sentences.join(' ');
+    // console.log("INFO", info);
 
     prompt = `"""Below is some Text. I need you to extract all third-party quotes including the speaker (if any).
     I also need you to return a list of the ten most pertinent facts from the Text.
@@ -203,8 +215,26 @@ const extractSummaries = async (mix) => {
   await Promise.all(promises);
 }
 
-const writeArticlePart = async (part, topic, outputType, article, index) => {
+const writeArticlePart = async (part, topic, outputType, article, index, location) => {
   let prompt;
+  let format;
+
+  if (!part || part.length < 10) article[index] = '';
+  
+  switch (location) {
+    case 'beginning':
+      format = `The return format must be HTML. Use headings, subheadings, bullet points, paragraphs, and bold to organize the information.`
+      break;
+    case 'middle':
+      format = `The return format must be HTML. Use headings, subheadings, bullet points, paragraphs, and bold to organize the information.`
+      break;
+    case 'end':
+      format = `The return format must be HTML. Use headings, subheadings, bullet points, paragraphs, and bold to organize the information.`
+      break;
+    default:
+      format = `The return format must be HMTL. Use headings, subheadings, bullet points, paragraphs, and bold to organize the information.`
+  }
+
 
   if (topic) {
     prompt = `"""[Return just the main response. Take out the pre-text and the post-text]
@@ -212,8 +242,14 @@ const writeArticlePart = async (part, topic, outputType, article, index) => {
 ${part}"""
 `
   } else {
-    prompt = `"""[Return just the main response. Take out the pre-text and the post-text]
-    Below are one or more Sources along with the Source numbers (#{sourceId}). These sources have Info and KeyFacts. Write a highly engaging, dynamic, long-form ${outputType}using as much Info and KeyFacts as possible.
+//     prompt = `"""[Return just the main response. Take out the pre-text and the post-text]
+//     Below are one or more Sources along with the Source numbers (#{sourceId}). These sources have Info and KeyFacts. Write a highly engaging, dynamic, long-form ${outputType}using as much Info and KeyFacts as possible.
+// ${part}"""
+// `
+
+    prompt = `"""
+Below are a set of Facts. Write a highly engaging, dynamic, long-form ${outputType} using as many of the facts as possible.
+${format}
 ${part}"""
 `
   }
@@ -231,7 +267,7 @@ const processMix = async (mix, socket) => {
   await extractText(mix);
 
   socket.emit('text', mix.content);
-  socket.emit('msg', {status: 'success', msg: 'Extracted text'});
+  socket.emit('msg', {status: 'success', msg: ''});
 
   /*
    * split text into chunks
@@ -243,7 +279,6 @@ const processMix = async (mix, socket) => {
 
   setTimeout(()=>{
     socket.emit('chunks', mix.content);
-    socket.emit('msg', {status: 'success', msg: 'Extracted chunks'});
   }, 5000);
 
   /*
@@ -264,7 +299,6 @@ const processMix = async (mix, socket) => {
   console.log('sending info');
 
   socket.emit('info', mix.content);
-  socket.emit('msg', {status: 'success', msg: 'Extracted usable information'});
 
   const articleChunks = [];
 
@@ -295,30 +329,18 @@ const processMix = async (mix, socket) => {
 
   const maxPartTokens = 2000;
   const articleParts = [];
-  let curPart = "";
+  let curPart = "Facts:\n";
   let curLength = 0;
   
   for (let i = 0; i < articleChunks.length; ++i) {
     let totalTokens = articleChunks[i].infoTokens + articleChunks[i].factsTokens;
     let test = curLength +  totalTokens;
     if (test <= maxPartTokens) {
-      curPart += `Source #${articleChunks[i].source} Info:
-      ${articleChunks[i].info.trim()}
-      
-      Source #${articleChunks[i].source} KeyFacts:
-      \t${articleChunks[i].keyFacts.join("\t\n")}
-      
-      `;
+      curPart += `${articleChunks[i].info.trim()}\n${articleChunks[i].keyFacts.join("\n")}`;
       curLength += totalTokens;
     } else {
       articleParts.push(curPart);
-      curPart = `Source #${articleChunks[i].source} Info:
-      ${articleChunks[i].info.trim()}
-      
-      Source #${articleChunks[i].source} KeyFacts:
-      \t${articleChunks[i].keyFacts.join("\t\n")}
-      
-      `;
+      curPart = `Facts:\n${articleChunks[i].info.trim()}\n${articleChunks[i].keyFacts.join("\n")}`;
       curLength = totalTokens;
     }
   }
@@ -344,7 +366,12 @@ const processMix = async (mix, socket) => {
   }
 
   for (let i = 0; i < articleParts.length; ++i) {
-    promises.push(writeArticlePart(articleParts[i], mix.topic, outputType, articleParts, i));
+    let location;
+    if (articleParts.length === 1) location = 'total';
+    else if (i === 0) location = 'beginning';
+    else if (i === articleParts.length - 1) location = 'end';
+    else location = 'middle';
+    promises.push(writeArticlePart(articleParts[i], mix.topic, outputType, articleParts, i, location));
   }
 
   console.log('waiting on article promises', promises.length);
@@ -357,11 +384,11 @@ const processMix = async (mix, socket) => {
   console.log('COMBINED ARTICLE PARTS', combinedArticleParts);
   socket.emit('rawArticle', {rawArticle: combinedArticleParts});
 
+  console.log('article tokens', nlp.numGpt3Tokens(combinedArticleParts))
+
   /*
   
-  article = [];
-
-  write the article parts. If more than one part then include subheadings (subheading = true);
+  
   
   add in quotes
     linked quotes
