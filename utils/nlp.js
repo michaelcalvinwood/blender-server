@@ -44,7 +44,6 @@ exports.getTokenChunks = (text, maxTokens = 2000, overlap = 500) => {
             curChunk = [];
             count = 0;
             startIndex = overlapIndex - 1;
-            console.log('startIndex', startIndex);
             i = startIndex;
             overlapIndex = -1;
         }
@@ -52,20 +51,7 @@ exports.getTokenChunks = (text, maxTokens = 2000, overlap = 500) => {
 
     if (curChunk.length) chunks.push(curChunk.join(' '));
 
-    console.log('chunks', chunks.length);
-
-    for (let i = 0; i < chunks.length; ++i) {
-        console.log(`chunk[${i}]: ${exports.numGpt3Tokens(chunks[i])}`);
-    }
-
-    console.log('chunks[0]', chunks[0])
-
+   return chunks;
 }
 
 
-const test = () => {
-    let tokens = exports.numGpt3Tokens('Hello Werld');
-    console.log('tokens', tokens);
-}
-
-test();

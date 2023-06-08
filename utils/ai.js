@@ -96,14 +96,19 @@ const getTurboJSON = async (prompt, temperature = .4) => {
     if (response.status === 'error') return false;
 
     try {
+        //console.log('getting JSON');
         const json = JSON.parse(response.content.replaceAll("\n", ""));
+        //console.log('JSON', json);
         return json;
     } catch (err) {
+        //console.log('JSON ERROR');
+        //console.error(err);
         return false;
     }
 }
 
 const getTurboText = async (prompt, temperature = .4) => {
+    console.log('getTurboText');
     let response = await this.getTurboResponse(prompt, temperature);
 
     if (response.status === 'error') return false;

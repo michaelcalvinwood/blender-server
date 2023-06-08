@@ -58,13 +58,13 @@ const extractUrlText = async (mix, index) => {
   const urlType = urlUtils.urlType(url);  // later add function here to get the type
 
   console.log('urlType', urlType);
+  let text;
 
   switch (urlType) {
     case 'html':
       const html = await urlUtils.getHTML(url);
       const article = await urlUtils.extractArticleFromHTML(html);
-      const text = urlUtils.getTextFromHTML(article);
-      mix.content[index].text = text;
+      text = urlUtils.getTextFromHTML(article);
       /*
        * TODO: If article === false email Michael with URL
        */
@@ -78,22 +78,24 @@ const extractUrlText = async (mix, index) => {
         let html = await convert.convertDocxToHTML(fileName);
         console.log('Got initial html');
         html = convert.removeImagesAndTablesFromHTML(html);
-        const text = urlUtils.getTextFromHTML(html);
-        mix.content[index].text = text;
+        text = urlUtils.getTextFromHTML(html);
+        
       } catch (err) {
         console.error(err);
-        mix.content[index].text = '';
+        text = '';
       }
       break;
     default:
       console.error('unknown urlType', urlType);
-      mix.content[index].text = '';
+      text = '';
     }
+
+    mix.content[index].text = text;
       
 }
 
 const extractText = async mix => {
-  console.log('mix', JSON.stringify(mix, null, 4));
+  //console.log('mix', JSON.stringify(mix, null, 4));
   const promises = [];
 
   for (let i = 0; i < mix.content.length; ++i) {
@@ -111,98 +113,264 @@ const extractText = async mix => {
   return;
 }
 
-const chatJSON = async (mix, index, prompt, temperature = .4) => {
-  mix.content[index].summary = await ai.getChatJSON(prompt, temperature);
-  console.log('summary', mix.content[index].summary);
+const getInfo = async (mix, i, j) => {
+  let info = mix.content[i].chunks[j];
+
+  if (!info) {
+    mix.content[i].info[j] = {
+      info: '',
+      quotes: [],
+      facts: []
+    }
+
+    return;
+  }
+
+  if (mix.topic) {
+    prompt = `"""Below is some Text. I need you return all the facts from the text that are relevant to the following topic: ${mix.topic}. Solely return facts that are relevant to that topic.
+    Also return a list of third-party quotes that are related to the following topic: ${mix.topic}.
+    Also return a list of the ten most pertinent facts that are related to the following topic: ${mix.topic}.
+    The return format must be stringified JSON in the following format: {
+      info: array of all the facts that related to the topic '${mix.topic}' goes here,
+      quotes: array of quotes in the following format {
+        speaker: the identity of the speaker goes here,
+        affiliation: the organization that the speaker is affiliated with goes here,
+        quote: the speaker's quote goes here
+      },
+      facts: array of the ten pertinent facts goes here
+    }
+    
+    Text:
+    ${info}"""
+    `
+    mix.content[i].info[j] = await ai.getChatJSON(prompt);
+    mix.content[i].info[j].info = mix.content[i].info[j].info.join(" ");
+  } else {
+    const lines = info.split("\n");
+    const sentences = [];
+    lines.forEach(line => {
+      const candidates = nlp.getSentences(line);
+      for (let i = 0; i < candidates.length; ++i) {
+        const trimmed = candidates[i].trim();
+        if (trimmed.endsWith('.') || trimmed.endsWith(':') || trimmed.endsWith('.')) sentences.push(trimmed);
+      }
+    })
+
+    info = sentences.join(' ');
+    console.log("INFO", info);
+
+    prompt = `"""Below is some Text. I need you to extract all third-party quotes including the speaker (if any).
+    I also need you to return a list of the ten most pertinent facts from the Text.
+    The return format must be stringified JSON in the following format: {
+      quotes: {
+        speaker: the identity of the speaker goes here,
+        affiliation: the organization that the speaker is affiliated with goes here,
+        quote: the speaker's quote goes here
+      },
+      facts: array of the three pertinent facts goes here
+    }
+    
+    Text:
+    ${info}"""
+    `
+    mix.content[i].info[j] = await ai.getChatJSON(prompt);
+
+    if (mix.content[i].info[j] !== false) {
+      mix.content[i].info[j].info = info;
+    } else {
+      mix.content[i].info[j] = {info: info, quotes: [], facts: []};
+    }
+  }
+
+  
+
+  console.log(`mix.content[${i}].info[${j}]`, mix.content[i].info[j]);
 }
 
 const extractSummaries = async (mix) => {
-  console.log('mix.topic', mix.topic);
-
+  //console.log('mix.topic', mix.topic);
+  //console.log('mix', JSON.stringify(mix, null, 4));
+  
   const promises = [];
-
-  let prompt;
-
+  //console.log('mix.content.length', mix.content.length);
   for (let i = 0; i < mix.content.length; ++i) {
-    let info = mix.content[i].text;
-    
-    if (!info) {
-      mix.content[i].summary = null;
-      continue;
+    mix.content[i].summaries = [];
+    for (let j = 0; j < mix.content[i].chunks.length; ++j) {
+      promises.push(getSummary(mix, i, j))
     }
-
-    if (mix.topic) {
-      prompt = `"""Below is some Info. Provide an extremely detailed summary of the info as it relates to the following topic: ${mix.topic}. The summary must solely include information related to that topic. 
-      Also return a list of third-party quotes that are related to the following topic: ${mix.topic}.
-      Also return a list of the three most pertinent facts that are related to the following topic: ${mix.topic}.
-      The return format must be stringified JSON in the following format: {
-        summary: the extremely detailed summary goes here, or "unrelated" goes here if none of the info is related to the topic: ${mix.topic},
-        quotes: {
-          speaker: the identity of the speaker goes here,
-          quote: the speaker's quote goes here
-        },
-        facts: array of the three pertinent facts goes here
-      }
-      
-      Info:
-      ${info}"""
-      `
-    } else {
-      prompt = `"""Below is some Info. Provide an extremely detailed summary of the facts contained in the info.
-      Also return a list of third-party quotes that are included in the info.
-      Also return a list of the three most pertinent facts from the info.
-      The return format must be stringified JSON in the following format: {
-        summary: the extremely detailed summary goes here,
-        quotes: {
-          speaker: the identity of the speaker goes here,
-          quote: the speaker's quote goes here
-        },
-        facts: array of the three pertinent facts goes here
-      }
-      
-      Info:
-      ${info}"""
-      `
-    }
-
-    console.log('prompt', prompt);
-    promises.push(chatJSON(mix, i, prompt));
   }
 
-  const results = await Promise.all(promises);
-  console.log('results', results);
-  
-  return;
+  await Promise.all(promises);
 }
 
+const writeArticlePart = async (part, topic, outputType, article, index) => {
+  let prompt;
 
+  if (topic) {
+    prompt = `"""[Return just the main response. Take out the pre-text and the post-text]
+    Below are one or more Sources along with the Source numbers (#{sourceId}). These sources have Info and KeyFacts. Write a highly engaging, dynamic, long-form ${outputType} on the following topic: ${topic}; using as much Info and KeyFacts as possible that is related to that topic.
+${part}"""
+`
+  } else {
+    prompt = `"""[Return just the main response. Take out the pre-text and the post-text]
+    Below are one or more Sources along with the Source numbers (#{sourceId}). These sources have Info and KeyFacts. Write a highly engaging, dynamic, long-form ${outputType}using as much Info and KeyFacts as possible.
+${part}"""
+`
+  }
+
+  article[index] = await ai.getChatText(prompt);
+}
 
 const processMix = async (mix, socket) => {
   
   socket.emit('msg', {status: 'success', msg: 'Received contents'});
 
-  await extractText(mix);
-
-  console.log('mix', mix);
-
-  let chunks = nlp.getTokenChunks(mix.content[0].text);
-  
   /*
-   * split large texts into separated contents
-   * contents is an array
-   * summaries are an array
+   * get text
    */
-
-  return;
-
+  await extractText(mix);
 
   socket.emit('text', mix.content);
   socket.emit('msg', {status: 'success', msg: 'Extracted text'});
 
-  await extractSummaries(mix);
+  /*
+   * split text into chunks
+   */
+  for (let i = 0; i < mix.content.length; ++i) {
+    if (!mix.content[i].text) mix.content[i].chunks = [];
+    else mix.content[i].chunks = nlp.getTokenChunks(mix.content[i].text);
+  }
 
-  socket.emit('summary', mix.content);
-  socket.emit('msg', {status: 'success', msg: 'Extracted summaries'});
+  setTimeout(()=>{
+    socket.emit('chunks', mix.content);
+    socket.emit('msg', {status: 'success', msg: 'Extracted chunks'});
+  }, 5000);
+
+  /*
+   * Extract information from chunks
+   */
+
+  let promises = [];
+  for (let i = 0; i < mix.content.length; ++i) {
+    mix.content[i].info = [];
+    for (let j = 0; j < mix.content[i].chunks.length; ++j) {
+      promises.push(getInfo(mix, i, j))
+    }
+  }
+
+  console.log('awaiting info promises');
+  await Promise.all(promises);
+
+  console.log('sending info');
+
+  socket.emit('info', mix.content);
+  socket.emit('msg', {status: 'success', msg: 'Extracted usable information'});
+
+  const articleChunks = [];
+
+  for (let i = 0; i < mix.content.length; ++i) {
+    for (let j = 0; j < mix.content[i].info.length; ++j) {
+      if (mix.content[i].info[j].info) {
+        articleChunks.push({
+          source: mix.content[i].id,
+          info: mix.content[i].info[j].info,
+          keyFacts: mix.content[i].info[j].facts,
+          infoTokens: nlp.numGpt3Tokens(mix.content[i].info[j].info),
+          factsTokens: nlp.numGpt3Tokens(mix.content[i].info[j].facts.join(' '))
+        })
+      }
+    }
+  }
+
+  /*
+   * Sort the article chunks by total tokens needed ascending
+   */
+
+  articleChunks.sort((a, b) => (a.infoTokens + a.factsTokens) - (b.infoTokens + b.factsTokens));
+  console.log('ARTICLE CHUNKS', articleChunks);
+
+  /*
+   * Combine article chunks into article parts based on token size
+   */
+
+  const maxPartTokens = 2000;
+  const articleParts = [];
+  let curPart = "";
+  let curLength = 0;
+  
+  for (let i = 0; i < articleChunks.length; ++i) {
+    let totalTokens = articleChunks[i].infoTokens + articleChunks[i].factsTokens;
+    let test = curLength +  totalTokens;
+    if (test <= maxPartTokens) {
+      curPart += `Source #${articleChunks[i].source} Info:
+      ${articleChunks[i].info.trim()}
+      
+      Source #${articleChunks[i].source} KeyFacts:
+      \t${articleChunks[i].keyFacts.join("\t\n")}
+      
+      `;
+      curLength += totalTokens;
+    } else {
+      articleParts.push(curPart);
+      curPart = `Source #${articleChunks[i].source} Info:
+      ${articleChunks[i].info.trim()}
+      
+      Source #${articleChunks[i].source} KeyFacts:
+      \t${articleChunks[i].keyFacts.join("\t\n")}
+      
+      `;
+      curLength = totalTokens;
+    }
+  }
+
+  if (curPart) articleParts.push(curPart);
+
+  console.log("ARTICLE PARTS", articleParts);
+
+  let outputType = 'news article';
+  const article = [];
+  promises = [];
+
+  switch (mix.output.type) {
+    case 'news':
+      outputType = 'news article';
+      break;
+    case 'blog':
+      outputType = 'blog post';
+      break;
+    case 'marketing':
+      outputType = 'marketing piece';
+      break;
+  }
+
+  for (let i = 0; i < articleParts.length; ++i) {
+    promises.push(writeArticlePart(articleParts[i], mix.topic, outputType, articleParts, i));
+  }
+
+  console.log('waiting on article promises', promises.length);
+  await Promise.all(promises);
+
+  console.log('ARTICLE PARTS', articleParts);
+
+  const combinedArticleParts = articleParts.join("\n");
+
+  console.log('COMBINED ARTICLE PARTS', combinedArticleParts);
+  socket.emit('rawArticle', {rawArticle: combinedArticleParts});
+
+  /*
+  
+  article = [];
+
+  write the article parts. If more than one part then include subheadings (subheading = true);
+  
+  add in quotes
+    linked quotes
+  
+  see if you can get the article generator to spit back the sources used.
+
+  in any case, attach recommended reading links
+  
+  */
 
   // await writeArticle(mix);
 
