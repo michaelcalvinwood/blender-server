@@ -11,7 +11,7 @@ const { SCRAPERAPI_KEY } = process.env;
 //const url = 'https://www.pymnts.com/news/retail/2023/will-consumers-pay-50-for-drugstore-brand-sunscreen/';
 
 exports.urlType = url => {
-    console.log('urlType', url);
+    //console.log('urlType', url);
 
     const base = url.substring(url.lastIndexOf('/')+1);
 
@@ -42,7 +42,7 @@ exports.getHTML = async url => {
     try {
       response = await axios(request);
     } catch (err) {
-      console.error('articleExtractor error:', err);
+      console.error('articleExtractor error:', err.response.status, err.response.status.text);
       return false;
     }
   
@@ -50,10 +50,12 @@ exports.getHTML = async url => {
 }
 
 exports.extractArticleFromHTML = async (html, url = '') => {
-    console.log('extractArticleFromHTML html type', typeof html);
-    if (typeof html !== 'string') return '';
-
-    console.log('extractArticleFromHTML html length', html.length);
+    
+    if (typeof html !== 'string') {
+      console.log('extractArticleFromHTML html error', html);
+      return '';
+    }
+    
 
     let article;
     

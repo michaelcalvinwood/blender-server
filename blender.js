@@ -58,7 +58,6 @@ const extractUrlText = async (mix, index) => {
 
   const urlType = urlUtils.urlType(url);  // later add function here to get the type
 
-  console.log('urlType', urlType);
   let text, fileName;
 
   switch (urlType) {
@@ -99,7 +98,7 @@ const extractUrlText = async (mix, index) => {
         }
         break;
     default:
-      console.error('unknown urlType', urlType);
+      console.error('ERROR: unknown urlType', urlType);
       text = '';
     }
 
@@ -185,7 +184,7 @@ const getInfo = async (mix, i, j) => {
     }
   }
 
-  console.log(`mix.content[${i}].info[${j}]`, mix.content[i].info[j]);
+  console.log(`mix.content[${i}].info[${j}]`);
 }
 
 const extractSummaries = async (mix) => {
@@ -218,6 +217,39 @@ const writeAbout = async (articlePart, topic, outputType) => {
 
 }
 
+const reduceArticlePart = async (articlePart, keepPercent) => {
+  prompt = `"""Below is an Article. Reduce this article to ${Math.floor(articlePart.partWords * keepPercent)} words, keeping the article highly dynamic and engaging.
+  
+  Article:
+  ${articlePart.part}"""
+  `
+
+  //console.log('PROMPT', prompt);
+
+  articlePart.reduced = await ai.getChatText(prompt);
+  articlePart.reducedWords = articlePart.reduced.split(' ').length;
+  articlePart.reducedTokens = nlp.numGpt3Tokens(articlePart.reduced);
+}
+
+const mergeArticleParts = async (articleParts, topic) => {
+  let articles = '';
+  for (let i = 0; i < articleParts.length; ++i) articles += `Article ${i+1}:\n${articleParts[i].reduced}\n\n`;
+  if (!topic) {
+    prompt = `"""Below are ${articleParts.length} Articles. Using 1200 words, rewrite these articles into a one highly engaging and dynamic 1200-word article.
+  
+  ${articles}"""
+  `
+  } else {
+    prompt = `"""Below are ${articleParts.length} Articles. Using 1200 words, rewrite these articles into a one highly engaging and dynamic 1200-word article about the following topic: ${topic}.
+  
+  ${articles}"""
+  `
+  }
+
+  console.log('PROMPT', prompt);
+
+  return await ai.getChatText(prompt);
+}
 
 const writeArticlePart = async (part, topic, outputType, article, index, location) => {
   let prompt;
@@ -335,7 +367,7 @@ const processMix = async (mix, socket) => {
     }
   }
 
-  console.log('awaiting info promises');
+  console.log('awaiting info promises', promises.length);
   await Promise.all(promises);
 
   socket.emit('info', mix.content);
@@ -392,6 +424,7 @@ const processMix = async (mix, socket) => {
   //console.log("ARTICLE PARTS", articleParts);
   console.log("ARTICLE TOKENS", articleTokens);
 
+  const mergedArticle = { content: ''}; 
 
   promises = [];
   for (let i = 0; i < articleParts.length; ++i) {
@@ -402,7 +435,7 @@ const processMix = async (mix, socket) => {
 
   await Promise.all(promises);
 
-  console.log('ARTICLE PARTS', articleParts);
+  console.log('ARTICLE PARTS', articleParts.length);
 
   let totalWords = 0;
   let totalTokens = 0;
@@ -412,27 +445,50 @@ const processMix = async (mix, socket) => {
     totalTokens += articleParts[i].partTokens;
   }
 
-  if (totalTokens > 2000) {
-    let keepPercent = 2000/totalTokens;
+  console.log("TOTAL TOKENS", totalTokens)
+
+  if (totalTokens > maxPartTokens) {
+    
+    let count = 0;
+    let keepPercent = (maxPartTokens/totalTokens);
+   while (totalTokens > maxPartTokens && count < 3) {
+    keepPercent -= count * .1;
     console.log('keepPercent', keepPercent);
 
     promises = [];
-    for (let i = 0; i < articleParts[i]; ++i) {
+    for (let i = 0; i < articleParts.length; ++i) {
       promises.push(reduceArticlePart(articleParts[i], keepPercent));
     }
 
-    console.log('awaiting reduce promises');
+    console.log('awaiting reduce promises', promises.length);
     await Promise.all(promises);
-    
-  } else {
-    for (let i = 0; i < articleParts[i]; ++i) {
-      articleParts[i].reduced = articleParts[i].part;
-      articleParts[i].reducedWords = articleParts[i].reduced.split(' ').length;
-      articleParts[i].reducedTokens = nlp.numGpt3Tokens(articleParts[i].reduced);
-    }
-  }
 
-  console.log('REDUCED ARTICLE PARTS', articleParts);
+    totalTokens = 0;
+    for (let i = 0; i < articleParts.length; ++i) {
+      totalTokens += articleParts[i].reducedTokens;
+    }
+
+    console.log("TOTAL TOKENS", totalTokens);
+    ++count;
+   }
+
+   /*
+    * At this point .reduced has an acceptable totalToken count
+    * It's time to merge the parts into a single article
+    */
+
+   console.log('awaiting merge')
+
+   mergedArticle.content = await mergeArticleParts(articleParts, mix.topic);
+
+  } else if (articleParts.length > 1) {
+    mergedArticle.content = await mergeArticleParts(articleParts, mix.topic);
+  } else if (articleParts.length > 0) mergedArticle.content = articleParts[0].part;
+    
+  mergedArticle.numWords = mergedArticle.content.split(" ").length;
+  mergedArticle.numTokens = nlp.numGpt3Tokens(mergedArticle.content);
+  
+  console.log('MERGED ARTICLE', mergedArticle);
   return;
 
 
