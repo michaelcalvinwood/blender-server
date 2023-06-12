@@ -10,7 +10,7 @@ exports.convertPdfToText = async fileName => {
     let data;
     try {
         data = await pdf(dataBuffer);    
-        return data.text;
+        return data.text.replaceAll("-\n", "").replaceAll("\n", " ");
     } catch (err) {
         console.error(err);
         return '';

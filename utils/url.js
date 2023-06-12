@@ -50,6 +50,10 @@ exports.getHTML = async url => {
 }
 
 exports.extractArticleFromHTML = async (html, url = '') => {
+    console.log('extractArticleFromHTML html type', typeof html);
+    if (typeof html !== 'string') return '';
+
+    console.log('extractArticleFromHTML html length', html.length);
 
     let article;
     

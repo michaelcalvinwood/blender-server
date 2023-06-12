@@ -70,7 +70,7 @@ const extractUrlText = async (mix, index) => {
        * TODO: If article === false email Michael with URL
        */
 
-      console.log('article length', article.length, url);
+      console.log('article', article);
       break;
     case 'docx':
       fileName = `/home/tmp/${uuidv4()}.docx`;
@@ -161,6 +161,18 @@ const getInfo = async (mix, i, j) => {
     mix.content[i].info[j] = await ai.getChatJSON(prompt);
     mix.content[i].info[j].info = mix.content[i].info[j] !== false ? mix.content[i].info[j].info.join(" ") : '';
   } else {
+    // const lines = info.split("\n");
+    // const sentences = [];
+    // lines.forEach(line => {
+    //   const candidates = nlp.getSentences(line);
+    //   for (let i = 0; i < candidates.length; ++i) {
+    //     const trimmed = candidates[i].trim();
+    //     if (trimmed.endsWith('.') || trimmed.endsWith(':') || trimmed.endsWith('.')) sentences.push(trimmed);
+    //   }
+    // })
+
+    // info = sentences.join(' ');
+    // console.log("INFO", info);
 
     prompt = `"""Below is some Text. I need you to extract all third-party quotes including the speaker (if any).
     I also need you to return a list of the ten most pertinent facts from the Text.
@@ -185,6 +197,8 @@ const getInfo = async (mix, i, j) => {
     }
   }
 
+  
+
   console.log(`mix.content[${i}].info[${j}]`, mix.content[i].info[j]);
 }
 
@@ -202,20 +216,6 @@ const extractSummaries = async (mix) => {
   }
 
   await Promise.all(promises);
-}
-
-const writeAbout = async (articlePart, topic, outputType) => {
-  prompt = `"""Below are a set of Facts. In ${Math.ceil(articlePart.tokens/2)} words, write a highly engaging, dynamic ${outputType} using as many facts as possible.
-  
-  ${articlePart.facts}"""
-  `
-
-  //console.log('PROMPT', prompt);
-
-  articlePart.part = await ai.getChatText(prompt);
-  articlePart.partWords = articlePart.part.split(' ').length;
-  articlePart.partTokens = nlp.numGpt3Tokens(articlePart.part);
-
 }
 
 
@@ -281,24 +281,6 @@ ${part}"""
 }
 
 const processMix = async (mix, socket) => {
-  let outputType;
-  switch (mix.output.type) {
-    case 'news':
-      outputType = 'news article';
-      break;
-    case 'blog':
-      outputType = 'blog post';
-      break;
-    case 'summary':
-      outputType = 'summary';
-      break;
-    case 'outline':
-      outputType = 'outline';
-      break;
-    case 'marketing':
-      outputType = 'marketing collateral';
-      break;
-  }
   
   socket.emit('msg', {status: 'success', msg: 'Retrieving contents'});
 
@@ -319,7 +301,6 @@ const processMix = async (mix, socket) => {
   }
 
   setTimeout(()=>{
-    socket.emit('msg', {status: 'success', msg: ''})
     socket.emit('chunks', mix.content);
   }, 5000);
 
@@ -337,6 +318,8 @@ const processMix = async (mix, socket) => {
 
   console.log('awaiting info promises');
   await Promise.all(promises);
+
+  console.log('sending info');
 
   socket.emit('info', mix.content);
 
@@ -361,7 +344,7 @@ const processMix = async (mix, socket) => {
    */
 
   articleChunks.sort((a, b) => (a.infoTokens + a.factsTokens) - (b.infoTokens + b.factsTokens));
-  //console.log('ARTICLE CHUNKS', articleChunks);
+  console.log('ARTICLE CHUNKS', articleChunks);
 
   /*
    * Combine article chunks into article parts based on token size
@@ -369,95 +352,31 @@ const processMix = async (mix, socket) => {
 
   const maxPartTokens = 2000;
   const articleParts = [];
-  let curFacts = "Facts:\n";
-  let curTokens = 0;
-  let articleTokens = 0;
+  let curPart = "Facts:\n";
+  let curLength = 0;
   
   for (let i = 0; i < articleChunks.length; ++i) {
     let totalTokens = articleChunks[i].infoTokens + articleChunks[i].factsTokens;
-    articleTokens += totalTokens;
-    let test = curTokens + totalTokens;
+    let test = curLength +  totalTokens;
     if (test <= maxPartTokens) {
-      curFacts += `${articleChunks[i].info.trim()}\n${articleChunks[i].keyFacts.join("\n")}`;
-      curTokens += totalTokens;
+      curPart += `${articleChunks[i].info.trim()}\n${articleChunks[i].keyFacts.join("\n")}`;
+      curLength += totalTokens;
     } else {
-      articleParts.push({facts: curFacts, tokens: curTokens});
-      curFacts = `Facts:\n${articleChunks[i].info.trim()}\n${articleChunks[i].keyFacts.join("\n")}`;
-      curTokens = totalTokens;
+      articleParts.push(curPart);
+      curPart = `Facts:\n${articleChunks[i].info.trim()}\n${articleChunks[i].keyFacts.join("\n")}`;
+      curLength = totalTokens;
     }
   }
 
-  if (curFacts) articleParts.push({facts: curFacts, tokens: curTokens});
+  if (curPart) articleParts.push(curPart);
 
-  //console.log("ARTICLE PARTS", articleParts);
-  console.log("ARTICLE TOKENS", articleTokens);
-
-
-  promises = [];
-  for (let i = 0; i < articleParts.length; ++i) {
-    promises.push(writeAbout(articleParts[i], mix.topic, outputType))
-  }
-
-  console.log('await articleParts promises', promises.length);
-
-  await Promise.all(promises);
-
-  console.log('ARTICLE PARTS', articleParts);
-
-  let totalWords = 0;
-  let totalTokens = 0;
-
-  for (let i = 0; i < articleParts.length; ++i) {
-    totalWords += articleParts[i].partWords;
-    totalTokens += articleParts[i].partTokens;
-  }
-
-  if (totalTokens > 2000) {
-    let keepPercent = 2000/totalTokens;
-    console.log('keepPercent', keepPercent);
-
-    promises = [];
-    for (let i = 0; i < articleParts[i]; ++i) {
-      promises.push(reduceArticlePart(articleParts[i], keepPercent));
-    }
-
-    console.log('awaiting reduce promises');
-    await Promise.all(promises);
-    
-  } else {
-    for (let i = 0; i < articleParts[i]; ++i) {
-      articleParts[i].reduced = articleParts[i].part;
-      articleParts[i].reducedWords = articleParts[i].reduced.split(' ').length;
-      articleParts[i].reducedTokens = nlp.numGpt3Tokens(articleParts[i].reduced);
-    }
-  }
-
-  console.log('REDUCED ARTICLE PARTS', articleParts);
-  return;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  console.log("ARTICLE PARTS", articleParts);
 
   /*
    * Write an article based on each part
    */
 
-
+  let outputType = 'news article';
   const article = [];
   promises = [];
 

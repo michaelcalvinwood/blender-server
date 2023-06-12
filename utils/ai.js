@@ -1,4 +1,4 @@
-const debug = true;
+const debug = false;
 
 require('dotenv').config();
 
@@ -108,7 +108,7 @@ const getTurboJSON = async (prompt, temperature = .4) => {
 }
 
 const getTurboText = async (prompt, temperature = .4) => {
-    console.log('getTurboText');
+    //console.log('getTurboText');
     let response = await this.getTurboResponse(prompt, temperature);
 
     if (response.status === 'error') return false;
