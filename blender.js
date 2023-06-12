@@ -209,7 +209,7 @@ const writeAbout = async (articlePart, topic, outputType) => {
   ${articlePart.facts}"""
   `
 
-  //console.log('PROMPT', prompt);
+  console.log('PROMPT', prompt);
 
   articlePart.part = await ai.getChatText(prompt);
   articlePart.partWords = articlePart.part.split(' ').length;
@@ -232,6 +232,7 @@ const reduceArticlePart = async (articlePart, keepPercent) => {
 }
 
 const mergeArticleParts = async (articleParts, topic) => {
+  console.log('mergeArticleParts topic', topic);
   let articles = '';
   for (let i = 0; i < articleParts.length; ++i) articles += `Article ${i+1}:\n${articleParts[i].reduced}\n\n`;
   if (!topic) {
@@ -248,6 +249,23 @@ const mergeArticleParts = async (articleParts, topic) => {
 
   console.log('PROMPT', prompt);
 
+  return await ai.getChatText(prompt);
+}
+
+const addSubheadings = async (mergedArticle, num) => {
+  // const prompt = `"""Below is some Content. Using ${mergedArticle.numWords + (num * 5)} words, expand the content by inserting ${num} eye-catching subheadings inside the content.
+  
+  // Content:
+  // ${mergedArticle.content}"""
+  // `
+
+  const prompt = `"""Below is some Content. Using ${mergedArticle.numWords + 100} words, rewrite the content using HTML. Use headings, subheadings, tables, bullet points, paragraphs, and bold to organize the information.
+  
+  Content:
+  ${mergedArticle.content}"""
+  `
+  
+  console.log('PROMPT', prompt);
   return await ai.getChatText(prompt);
 }
 
@@ -421,7 +439,7 @@ const processMix = async (mix, socket) => {
 
   if (curFacts) articleParts.push({facts: curFacts, tokens: curTokens});
 
-  //console.log("ARTICLE PARTS", articleParts);
+  console.log("ARTICLE PARTS", articleParts);
   console.log("ARTICLE TOKENS", articleTokens);
 
   const mergedArticle = { content: ''}; 
@@ -435,7 +453,7 @@ const processMix = async (mix, socket) => {
 
   await Promise.all(promises);
 
-  console.log('ARTICLE PARTS', articleParts.length);
+  console.log('ARTICLE PARTS', articleParts);
 
   let totalWords = 0;
   let totalTokens = 0;
@@ -451,8 +469,8 @@ const processMix = async (mix, socket) => {
     
     let count = 0;
     let keepPercent = (maxPartTokens/totalTokens);
-   while (totalTokens > maxPartTokens && count < 3) {
-    keepPercent -= count * .1;
+   while (totalTokens > maxPartTokens && count <= 3) {
+    keepPercent -= .1;
     console.log('keepPercent', keepPercent);
 
     promises = [];
@@ -482,13 +500,34 @@ const processMix = async (mix, socket) => {
    mergedArticle.content = await mergeArticleParts(articleParts, mix.topic);
 
   } else if (articleParts.length > 1) {
+    for (let i = 0; i < articleParts.length; ++i) {
+      articleParts[i].reduced = articleParts[i].part;
+      articleParts[i].reducedWords = articleParts[i].reduced.split(' ').length;
+      articleParts[i].reducedTokens = nlp.numGpt3Tokens(articleParts[i].reduced);
+    } 
     mergedArticle.content = await mergeArticleParts(articleParts, mix.topic);
-  } else if (articleParts.length > 0) mergedArticle.content = articleParts[0].part;
+  } else if (articleParts.length > 0) {
+    articleParts[0].reduced = articleParts[0].part;
+    articleParts[0].reducedWords = articleParts[0].reduced.split(' ').length;
+    articleParts[0].reducedTokens = nlp.numGpt3Tokens(articleParts[0].reduced);
+    mergedArticle.content = articleParts[0].part;
+  } else {
+    return socket.emit('msg', {status: 'error', msg: 'unabled to produced article'});
+  }
     
   mergedArticle.numWords = mergedArticle.content.split(" ").length;
   mergedArticle.numTokens = nlp.numGpt3Tokens(mergedArticle.content);
   
   console.log('MERGED ARTICLE', mergedArticle);
+
+  console.log('awaiting adding subheadings');
+
+  mergedArticle.subheadings = await addSubheadings(mergedArticle, 4);
+
+  console.log(mergedArticle);
+
+  socket.emit('rawArticle', {rawArticle: mergedArticle.subheadings});
+
   return;
 
 
