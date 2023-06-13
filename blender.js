@@ -242,6 +242,8 @@ const mergeArticleParts = async (articleParts, topic) => {
   `
   } else {
     prompt = `"""Below are ${articleParts.length} Articles. Using 1200 words, rewrite these articles into a one highly engaging and dynamic 1200-word article about the following topic: ${topic}.
+
+    [Content Guide: Make sure the returned content solely includes information related to the following topic: ${topic}.]
   
   ${articles}"""
   `
@@ -335,6 +337,17 @@ ${part}"""
   }
 
   article[index] = await ai.getChatText(prompt);
+}
+
+const extractSubheadingSections = html => {
+  const bodyBeginning = html.indexOf('<body>');
+  const bodyEnding = html.indexOf('</body>');
+  if (bodyBeginning < 0 || bodyEnding < 0) return false;
+
+  const body = html.substring(bodyBeginning + 6, bodyEnding);
+
+  console.log('body', body);
+  
 }
 
 const processMix = async (mix, socket) => {
@@ -454,8 +467,7 @@ const processMix = async (mix, socket) => {
 
   console.log("ARTICLE PARTS", articleParts);
   console.log("ARTICLE TOKENS", articleTokens);
-  return;
-  
+
   const mergedArticle = { content: ''}; 
 
   promises = [];
@@ -536,11 +548,13 @@ const processMix = async (mix, socket) => {
 
   console.log('awaiting adding subheadings');
 
-  mergedArticle.subheadings = await addSubheadings(mergedArticle, 4);
+  mergedArticle.withSubheadings = await addSubheadings(mergedArticle, 4);
 
   console.log(mergedArticle);
 
-  socket.emit('rawArticle', {rawArticle: mergedArticle.subheadings});
+  socket.emit('rawArticle', {rawArticle: mergedArticle.withSubheadings});
+
+  mergedArticle.subheadings = extractSubheadingSections(mergedArticle.withSubheadings);
 
   return;
 
