@@ -424,7 +424,7 @@ const processMix = async (mix, socket) => {
 
   articleChunks.sort((a, b) => (a.infoTokens + a.factsTokens) - (b.infoTokens + b.factsTokens));
   console.log('ARTICLE CHUNKS', JSON.stringify(articleChunks, null, 4));
-  return;
+ 
 
   /*
    * Combine article chunks into article parts based on token size
@@ -441,11 +441,11 @@ const processMix = async (mix, socket) => {
     articleTokens += totalTokens;
     let test = curTokens + totalTokens;
     if (test <= maxPartTokens) {
-      curFacts += `${articleChunks[i].info.trim()}\n${articleChunks[i].keyFacts.join("\n")}`;
+      curFacts += `${articleChunks[i].info.trim()}\n${articleChunks[i].factList}`;
       curTokens += totalTokens;
     } else {
       articleParts.push({facts: curFacts, tokens: curTokens});
-      curFacts = `Facts:\n${articleChunks[i].info.trim()}\n${articleChunks[i].keyFacts.join("\n")}`;
+      curFacts = `Facts:\n${articleChunks[i].info.trim()}\n${articleChunks[i].factList}`;
       curTokens = totalTokens;
     }
   }
@@ -454,7 +454,8 @@ const processMix = async (mix, socket) => {
 
   console.log("ARTICLE PARTS", articleParts);
   console.log("ARTICLE TOKENS", articleTokens);
-
+  return;
+  
   const mergedArticle = { content: ''}; 
 
   promises = [];
