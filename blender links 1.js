@@ -34,7 +34,7 @@ const handleLogin = async (req, res) => {
 
   if (!username || !password) return res.status(400).json('bad request');
 
-  const result = await wp.getJWT('delta.pymnts.com', username, password);
+  const result = await wp.getJWT(username, password);
 
   if (result === false)  return res.status(401).json('invalid credentials');
   
@@ -203,7 +203,7 @@ const extractSummaries = async (mix) => {
   await Promise.all(promises);
 }
 
-const writeAbout = async (articlePart, topic, outputType) => {
+const writeAboutOrig = async (articlePart, topic, outputType) => {
   prompt = `"""Below are a set of Facts. In ${Math.ceil(articlePart.tokens/2)} words, write a highly engaging, dynamic ${outputType} using as many facts as possible.
   
   ${articlePart.facts}"""
@@ -217,9 +217,27 @@ const writeAbout = async (articlePart, topic, outputType) => {
 
 }
 
-const reduceArticlePart = async (articlePart, keepPercent) => {
-  prompt = `"""Below is an Article. Reduce this article to ${Math.floor(articlePart.partWords * keepPercent)} words, keeping the article highly dynamic and engaging.
+const writeAbout = async (articlePart, topic, outputType) => {
+  prompt = `"""Below are Sources of information with their respective URLs. In ${Math.ceil(articlePart.tokens/2)} words, write an ${outputType} regarding the following topic: ${topic}. 
   
+  [Format Guide: The returned content must use HTML anchor tags to wrap keywords in at least 3 sentences to attribute the source URLs for the sentences.]
+  
+  ${articlePart.facts}"""
+  `
+
+  console.log('PROMPT', prompt);
+
+  articlePart.part = await ai.getChatText(prompt);
+  articlePart.partWords = articlePart.part.split(' ').length;
+  articlePart.partTokens = nlp.numGpt3Tokens(articlePart.part);
+
+}
+
+const reduceArticlePart = async (articlePart, keepPercent) => {
+  prompt = `"""Below is an Article. Reduce this article to ${Math.floor(articlePart.partWords * keepPercent)} words, keeping the article highly dynamic and engaging. Be sure to include all links the reduced article.
+  
+  [Format Guide: The returned content must include all the links in the original article.]
+
   Article:
   ${articlePart.part}"""
   `
@@ -385,7 +403,7 @@ const processMix = async (mix, socket) => {
     }
   }
 
-  console.log('awaiting info promises', promises.length);
+  console.log('awaiting info from chunks', promises.length);
   await Promise.all(promises);
 
   socket.emit('info', mix.content);
@@ -397,14 +415,30 @@ const processMix = async (mix, socket) => {
       if (mix.content[i].info[j].info) {
         articleChunks.push({
           source: mix.content[i].id,
+          url: mix.content[i].url,
           info: mix.content[i].info[j].info,
           keyFacts: mix.content[i].info[j].facts,
-          infoTokens: nlp.numGpt3Tokens(mix.content[i].info[j].info),
-          factsTokens: nlp.numGpt3Tokens(mix.content[i].info[j].facts.join(' '))
         })
       }
     }
   }
+
+  /*
+   * add sourcing to each line in info and for each fact
+   */
+
+    for (let i = 0; i < articleChunks.length; ++i) {
+      const lines = articleChunks[i].info.split("\n");
+      for (let j = 0; j < lines.length; ++j) lines[j] = `Source ${articleChunks[i].url}: ${lines[j]}`;
+      articleChunks[i].info = lines.join("\n");
+      for (let j = 0; j < articleChunks[i].keyFacts.length; ++j) articleChunks[i].keyFacts[j] = `Source ${articleChunks[i].url}: ${articleChunks[i].keyFacts[j]}`;
+
+      articleChunks[i].infoTokens = nlp.numGpt3Tokens(articleChunks[i].info);
+      articleChunks[i].factsTokens = nlp.numGpt3Tokens(articleChunks[i].keyFacts.join(' '));
+    }
+
+  //console.log('ARTICLE CHUNKS', articleChunks);
+  
 
   /*
    * Sort the article chunks by total tokens needed ascending
@@ -419,7 +453,7 @@ const processMix = async (mix, socket) => {
 
   const maxPartTokens = 2000;
   const articleParts = [];
-  let curFacts = "Facts:\n";
+  let curFacts = "";
   let curTokens = 0;
   let articleTokens = 0;
   
@@ -428,11 +462,11 @@ const processMix = async (mix, socket) => {
     articleTokens += totalTokens;
     let test = curTokens + totalTokens;
     if (test <= maxPartTokens) {
-      curFacts += `${articleChunks[i].info.trim()}\n${articleChunks[i].keyFacts.join("\n")}`;
+      curFacts += `${articleChunks[i].info.trim()}\n${articleChunks[i].keyFacts.join("\n")}\n\n`;
       curTokens += totalTokens;
     } else {
       articleParts.push({facts: curFacts, tokens: curTokens});
-      curFacts = `Facts:\n${articleChunks[i].info.trim()}\n${articleChunks[i].keyFacts.join("\n")}`;
+      curFacts = `${articleChunks[i].info.trim()}\n${articleChunks[i].keyFacts.join("\n")}\n\n`;
       curTokens = totalTokens;
     }
   }
@@ -441,8 +475,6 @@ const processMix = async (mix, socket) => {
 
   console.log("ARTICLE PARTS", articleParts);
   console.log("ARTICLE TOKENS", articleTokens);
-
-  const mergedArticle = { content: ''}; 
 
   promises = [];
   for (let i = 0; i < articleParts.length; ++i) {
@@ -481,6 +513,9 @@ const processMix = async (mix, socket) => {
     console.log('awaiting reduce promises', promises.length);
     await Promise.all(promises);
 
+    console.log("ARTICLE PARTS REDUCED", articleParts);
+    return;
+    
     totalTokens = 0;
     for (let i = 0; i < articleParts.length; ++i) {
       totalTokens += articleParts[i].reducedTokens;
@@ -497,6 +532,7 @@ const processMix = async (mix, socket) => {
 
    console.log('awaiting merge')
 
+   const mergedArticle = { content: ''}; 
    mergedArticle.content = await mergeArticleParts(articleParts, mix.topic);
 
   } else if (articleParts.length > 1) {
