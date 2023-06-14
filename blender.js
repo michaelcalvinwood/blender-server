@@ -346,8 +346,17 @@ const extractSubheadingSections = html => {
 
   const body = html.substring(bodyBeginning + 6, bodyEnding);
 
+  const h2s = [];
+  let h2loc = -1;
+  while (true) {
+    h2loc = body.indexOf('<h2>', h2loc+1);
+    if (h2loc === -1) break;
+    h2s.push(h2loc);
+  }
+
   console.log('body', body);
-  
+  console.log('h2s', h2s);
+
 }
 
 const processMix = async (mix, socket) => {
@@ -416,9 +425,14 @@ const processMix = async (mix, socket) => {
     for (let j = 0; j < mix.content[i].info.length; ++j) {
       if (mix.content[i].info[j].info) {
         articleChunks.push({
-          source: mix.content[i].id,
+          id: mix.content[i].id,
+          source: mix.content[i].source,
+          title: mix.content[i].title,
+          type: mix.content[i].type,
+          url: mix.content[i].url,
           info: mix.content[i].info[j].info,
           keyFacts: mix.content[i].info[j].facts,
+          quotes: mix.content[i].info[j].quotes,
           infoTokens: nlp.numGpt3Tokens(mix.content[i].info[j].info),
         })
       }
@@ -437,7 +451,7 @@ const processMix = async (mix, socket) => {
 
   articleChunks.sort((a, b) => (a.infoTokens + a.factsTokens) - (b.infoTokens + b.factsTokens));
   console.log('ARTICLE CHUNKS', JSON.stringify(articleChunks, null, 4));
- 
+  return;
 
   /*
    * Combine article chunks into article parts based on token size
