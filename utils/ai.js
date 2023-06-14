@@ -92,12 +92,10 @@ exports.getTurboResponse = async (prompt, temperature = 0, service = 'You are a 
     return response;
 }
 
-exports.getDivinciResponse = async (prompt, socket = null) => {
-    console.log("DAVINCI");
-
+exports.getDivinciResponse = async (prompt, output = 'text', temperature = .7) => {
     const numPromptTokens = nlp.numGpt3Tokens(prompt);
 
-    console.log('prompt', numPromptTokens, prompt);
+    if (debug) console.log('DIVINCI PROMPT', numPromptTokens, prompt);
 
     const request = {
         url: 'https://api.openai.com/v1/completions',
@@ -109,30 +107,43 @@ exports.getDivinciResponse = async (prompt, socket = null) => {
             model: "text-davinci-003",
             prompt,
             max_tokens: 4000 - numPromptTokens,
-            temperature: .7
+            temperature
         }
     }
 
     let response;
+    let success = false;
+    let count = 0;
+    let seconds = 3;
+    let maxCount = 10;
 
-    try {
-        response = await axios(request);
-        console.log(response.data);
-    } catch (err) {
-        console.log(JSON.stringify(err, null, 4));
-        //console.error(err);
-        return {
-            status: 'error',
-            number: err.response.status,
-            message: err.response,
+    while (!success) {
+        try {
+            response = await axios(request);
+            
+        } catch (err) {
+            console.error("axios err.data", err.response.status, err.response.statusText, err.response.data);
+            ++count;
+            if (count >= maxCount || err.response.status === 400) {
+                console.log("STATUS 400 EXIT");
+                return false;
+            }
+            seconds *= 2;
+            await sleep(seconds);
+            console.log('Retrying query:', prompt);
         }
     }
 
-    return {
-        status: 'success',
-        finishReason: response.data.choices[0].finish_reason,
-        content: response.data.choices[0].text
+    if (output === 'text') return response.data.choices[0].text;
+
+    let json;
+    try {
+        json = JSON.parse(response.content.replaceAll("\n", ""));
+    } catch (err) {
+        return false;
     }
+
+    return json;
 }
 
 const dTest = async () => {
@@ -176,10 +187,10 @@ const dTest = async () => {
 
   let response = await exports.getDivinciResponse(prompt);
 
-  console.log(response);
+  console.log("RESPONSE", response);
 }
 
-dTest();
+//dTest();
 
 const getTurboJSON = async (prompt, temperature = .4) => {
     let response = await this.getTurboResponse(prompt, temperature);

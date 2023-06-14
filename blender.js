@@ -275,7 +275,8 @@ const addSubheadings = async (mergedArticle, num, factLinks) => {
   ${factLinks.join("\n")}"""
   `
   console.log('PROMPT', prompt);
-  return await ai.getChatText(prompt);
+  //return await ai.getChatText(prompt);
+  return await ai.getDivinciResponse(prompt);
 }
 
 const getFactLink = (fact, keywords, url) => {
