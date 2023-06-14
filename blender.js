@@ -380,21 +380,36 @@ ${part}"""
 const extractSubheadingSections = html => {
   const bodyBeginning = html.indexOf('<body>');
   const bodyEnding = html.indexOf('</body>');
-  if (bodyBeginning < 0 || bodyEnding < 0) return false;
 
-  const body = html.substring(bodyBeginning + 6, bodyEnding);
+  const body = (bodyBeginning < 0 || bodyEnding < 0) ? html : html.substring(bodyBeginning + 6, bodyEnding);
 
-  const h2s = [];
+  const h2Locs = [];
   let h2loc = -1;
   while (true) {
     h2loc = body.indexOf('<h2>', h2loc+1);
     if (h2loc === -1) break;
-    h2s.push(h2loc);
+    h2Locs.push(h2loc);
   }
 
-  console.log('body', body);
-  console.log('h2s', h2s);
+  //console.log('body', body);
+  //console.log('h2Locs', h2Locs);
 
+  const h2s = [];
+
+  if (h2Locs[0] > 0) h2s.push(body.substring(0, h2Locs[0]));
+  for (let i = 0; i < h2Locs.length - 1; ++i) {
+    h2s.push(body.substring(h2Locs[i], h2Locs[i+1]))
+  }
+  h2s.push(body.substring(h2Locs[h2Locs.length - 1]));
+
+  //console.log('H2S', h2s);
+
+  for (let i = 0; i < h2s.length; ++i) {
+    console.log(`h2 #${i}: `, h2s[i]);
+  }
+
+  return h2s;
+  
 }
 
 const processMix = async (mix, socket) => {
@@ -489,7 +504,7 @@ const processMix = async (mix, socket) => {
    */
 
   articleChunks.sort((a, b) => (a.infoTokens + a.factsTokens) - (b.infoTokens + b.factsTokens));
-  console.log('ARTICLE CHUNKS', JSON.stringify(articleChunks, null, 4));
+  //console.log('ARTICLE CHUNKS', JSON.stringify(articleChunks, null, 4));
 
   const factLinks = [];
   for (let i = 0; i < articleChunks.length; ++i) {
@@ -497,9 +512,7 @@ const processMix = async (mix, socket) => {
       factLinks.push(articleChunks[i].factLinks[j]);
   }
   
-  console.log('FACT LINKS', factLinks);
-  
-  return;
+  //console.log('FACT LINKS', factLinks);
 
   /*
    * Combine article chunks into article parts based on token size
@@ -541,7 +554,7 @@ const processMix = async (mix, socket) => {
 
   await Promise.all(promises);
 
-  console.log('ARTICLE PARTS', articleParts);
+  //console.log('ARTICLE PARTS', articleParts);
 
   let totalWords = 0;
   let totalTokens = 0;
@@ -612,11 +625,15 @@ const processMix = async (mix, socket) => {
 
   mergedArticle.withSubheadings = await addSubheadings(mergedArticle, 4);
 
-  console.log(mergedArticle);
+ 
 
   socket.emit('rawArticle', {rawArticle: mergedArticle.withSubheadings});
 
   mergedArticle.subheadings = extractSubheadingSections(mergedArticle.withSubheadings);
+
+  console.log(mergedArticle);
+  // mergedArticle.expandedSubheadings = await expandSubheadings(mergedArticle.subheadings, factLinks)
+
 
   return;
 
