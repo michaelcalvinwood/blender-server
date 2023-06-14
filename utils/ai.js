@@ -5,6 +5,7 @@ require('dotenv').config();
 const axios = require('axios');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
+const nlp = require('./nlp');
 
 const { Configuration, OpenAIApi } = require("openai");
 
@@ -20,6 +21,7 @@ async function turboChatCompletion (prompt, temperature = 0, service = 'You are 
      * role: assistant, system, user
      */
 
+   
 
     const request = {
         url: 'https://api.openai.com/v1/chat/completions',
@@ -89,6 +91,95 @@ exports.getTurboResponse = async (prompt, temperature = 0, service = 'You are a 
 
     return response;
 }
+
+exports.getDivinciResponse = async (prompt, socket = null) => {
+    console.log("DAVINCI");
+
+    const numPromptTokens = nlp.numGpt3Tokens(prompt);
+
+    console.log('prompt', numPromptTokens, prompt);
+
+    const request = {
+        url: 'https://api.openai.com/v1/completions',
+        method: 'post',
+        headers: {
+            'Authorization': `Bearer ${process.env.PYMNTS_OPENAI_KEY}`,
+        },
+        data: {
+            model: "text-davinci-003",
+            prompt,
+            max_tokens: 4000 - numPromptTokens,
+            temperature: .7
+        }
+    }
+
+    let response;
+
+    try {
+        response = await axios(request);
+        console.log(response.data);
+    } catch (err) {
+        console.log(JSON.stringify(err, null, 4));
+        //console.error(err);
+        return {
+            status: 'error',
+            number: err.response.status,
+            message: err.response,
+        }
+    }
+
+    return {
+        status: 'success',
+        finishReason: response.data.choices[0].finish_reason,
+        content: response.data.choices[0].text
+    }
+}
+
+const dTest = async () => {
+    prompt = `"""Below is some Content and FactLinks. Using 692 words, rewrite the content using HTML by incorporating 5 FactLinks verbatim, as-is.
+  
+    [Format Guide: Use headings, subheadings, tables, bullet points, paragraphs, links, and bold to organize the information. There must be a minimum of 5 FactLinks included.] 
+    
+    Content:
+    Inflation has been a major concern for American voters and the Biden administration, but there is finally some good news on the horizon. According to the U.S. Bureau of Labor Statistics, inflation slowed in May to the lowest rate in two years, largely due to declining prices for energy such as gasoline and electricity. The consumer price index increased 4% in May relative to a year earlier, a slowdown from 4.9% in April. 
+  
+  One of the most significant categories in the consumer price index is housing, which accounts for more than a third of the CPI weighting, the most of any other consumer good or service. Housing inflation has been stubbornly high for months, but economists believe it has peaked and is on the precipice of a reversal. Price changes in "shelter" were generally muted before the pandemic, but Covid-19 warped that dynamic: Housing costs shot up but have slowed and even started to fall in some areas, economists said. 
+  
+  While shelter is still playing a big role in inflation, it should be slowing in the second half of the year. In May, shelter prices rose 0.6%, up from 0.4% in April. They're up 8% in the past year. Monthly prices for used cars and trucks, motor vehicle insurance, apparel, personal care, and education also increased notably in May, according to the BLS. When measuring increases over the past year, notable categories include motor vehicle insurance, which saw prices jump by 17.1%, recreation (4.5%), household furnishings and operations (4.2%), and new vehicles (4.7%). 
+  
+  Aside from energy, many consumer categories also deflated from April to May, including airline fares, communication, new vehicles, and recreation, according to the BLS. Over the past year, there was deflation in categories such as airline fares, car and truck rentals, citrus fruits, fresh whole milk, and used cars and trucks. 
+  
+  Inflation is still high enough to concern the Federal Reserve, but drops in food and fuel prices might explain why consumers have lowered their forecast for where they expect inflation to be in the short term. The New York Fed reported that consumer expectations for inflation a year from now have declined. However, prices are still much higher than they were before the pandemic, and other economic headwinds remain on the horizon, including stubbornly high shelter inflation, increasingly restrictive monetary policy, as well as the possibility of a recession. 
+  
+  The May PPI report is the second piece of good inflation news in a two-day span: On Tuesday, the Producer Price Index showed that annual price increases seen by producers measured 1.1% for the 12 months ended in May, easing sharply from the 2.3% bump recorded in April. Driven by a decline in energy prices and food prices, this inflation measure has now decelerated for 11 consecutive months. It’s now at its lowest annual reading since December 2020, when post-pandemic demand was starting to return and producer prices were beginning their upward inflationary march. 
+  
+  Overall, while inflation is still a concern, there are signs that it may be easing. This is good news for consumers and the Biden administration, as high inflation can be a burden on many people. The Federal Reserve is expected to pause after more than a year of interest rate hikes, but they may not be done for good since inflation remains elevated. If inflation can get under 4% and closer to 2%, the White House and the Biden campaign would be on stronger footing. However, they will have to be careful since they have a credibility problem coming out of the beginning of inflation.
+    
+    FactLinks:
+    <a href="https://www.bloomberg.com/news/newsletters/2023-06-13/inflation-is-easing-that-s-good-news-for-consumers-and-biden" target="_blank">INFLATION</a> IS EASING. THAT'S GOOD NEWS FOR CONSUMERS AND BIDEN
+  After soaring last year, <a href="https://www.bloomberg.com/news/newsletters/2023-06-13/inflation-is-easing-that-s-good-news-for-consumers-and-biden" target="_blank">egg prices</a> saw a big drop
+  Finally, some good news on inflation for <a href="https://www.bloomberg.com/news/newsletters/2023-06-13/inflation-is-easing-that-s-good-news-for-consumers-and-biden" target="_blank">American voters</a> — and by extension, Joe Biden.
+  Housing is perhaps the most consequential category in the <a href="https://www.cnbc.com/2023/06/14/housing-inflation-will-almost-surely-fall-soon-say-economists.html" target="_blank">consumer price index</a>, a key inflation barometer.
+  As the largest expense for an average <a href="https://www.cnbc.com/2023/06/14/housing-inflation-will-almost-surely-fall-soon-say-economists.html" target="_blank">U.S. household</a>, shelter accounts for more than a third of the CPI weighting, the most of any other consumer good or service.
+  <a href="https://www.cnbc.com/2023/06/14/housing-inflation-will-almost-surely-fall-soon-say-economists.html" target="_blank">Housing inflation</a> has been stubbornly high for months, according to CPI data.
+  Inflation slowed in May to the lowest rate in two years, largely on the back of declining prices for energy such as gasoline and electricity, the <a href="https://www.cnbc.com/2023/06/13/heres-the-inflation-breakdown-for-may-2023-in-one-chart.html" target="_blank">U.S. Bureau of Labor Statistics</a> said Tuesday.
+  The <a href="https://www.cnbc.com/2023/06/13/heres-the-inflation-breakdown-for-may-2023-in-one-chart.html" target="_blank">consumer price index</a> increased 4% in May relative to a year earlier, a slowdown from 4.9% in April.
+  <a href="https://www.cnbc.com/2023/06/13/heres-the-inflation-breakdown-for-may-2023-in-one-chart.html" target="_blank">Shelter prices</a> rose 0.6% in May, up from 0.4% in April. They're up 8% in the past year.
+  Inflation is still high enough to concern the <a href="https://www.politico.com/news/2023/06/14/the-new-inflation-politics-00101900" target="_blank">Federal Reserve</a>
+  <a href="https://www.politico.com/news/2023/06/14/the-new-inflation-politics-00101900" target="_blank">Energy prices</a> dropped a whopping 3.6 percent — with gasoline alone plunging 5.6 percent
+  Food prices ticked up only 0.2 percent in May compared to April, with <a href="https://www.politico.com/news/2023/06/14/the-new-inflation-politics-00101900" target="_blank">grocery costs</a> essentially flat after falling in the previous two months
+  US inflation at the wholesale level has cooled once again, this time landing well below its pre-pandemic average. The Producer Price Index showed that annual price increases seen by producers measured 1.1% for the 12 months ended in May, easing sharply from the 2.3% bump recorded in April, according to data released Wednesday by the <a href="https://www.cnn.com/2023/06/14/economy/ppi-inflation-may/index.html" target="_blank">Bureau of Labor Statistics</a>.
+  The PPI is a closely watched inflation gauge, since it captures <a href="https://www.cnn.com/2023/06/14/economy/ppi-inflation-may/index.html" target="_blank">average price shifts</a> upstream of the consumer. It’s viewed as a potential leading indicator of how prices could eventually behave at the store level.
+  Stripping out the more volatile categories of energy and food, the core PPI index showed that prices increased 0.2% from April and moderated to 2.8% on an annual basis. The May PPI report is the second piece of good inflation news in a two-day span: On Tuesday, the <a href="https://www.cnn.com/2023/06/14/economy/ppi-inflation-may/index.html" target="_blank">Consumer Price Index</a> showed that inflation eased to 4% on an annual basis in May."""
+  
+  `;
+
+  let response = await exports.getDivinciResponse(prompt);
+
+  console.log(response);
+}
+
+dTest();
 
 const getTurboJSON = async (prompt, temperature = .4) => {
     let response = await this.getTurboResponse(prompt, temperature);

@@ -130,6 +130,8 @@ const extractText = async mix => {
 const getInfo = async (mix, i, j) => {
   let info = mix.content[i].chunks[j];
 
+  const numberPertinentFacts = 3;
+
   if (!info) {
     mix.content[i].info[j] = {
       info: '',
@@ -143,7 +145,7 @@ const getInfo = async (mix, i, j) => {
   if (mix.topic) {
     prompt = `"""Below is some Text. I need you return all the facts from the text that are relevant to the following topic: ${mix.topic}. Solely return facts that are relevant to that topic.
     Also return a list of third-party quotes that are related to the following topic: ${mix.topic}.
-    Also return a list of the ten most pertinent facts that are related to the following topic: ${mix.topic}.
+    Also return a list of the ${numberPertinentFacts} most pertinent facts that are related to the following topic: ${mix.topic}.
     The return format must be stringified JSON in the following format: {
       info: array of all the facts that related to the topic '${mix.topic}' goes here,
       quotes: array of quotes in the following format {
@@ -151,7 +153,7 @@ const getInfo = async (mix, i, j) => {
         affiliation: the organization that the speaker is affiliated with goes here,
         quote: the speaker's quote goes here
       },
-      facts: array of the ten pertinent facts goes here in the following format : {fact: the fact goes here, keywords: array of prominent keywords in the fact goes here}
+      facts: array of the ${numberPertinentFacts} pertinent facts goes here in the following format : {fact: the fact goes here, keywords: array of prominent keywords in the fact goes here}
     }
     
     Text:
@@ -254,19 +256,24 @@ const mergeArticleParts = async (articleParts, topic) => {
   return await ai.getChatText(prompt);
 }
 
-const addSubheadings = async (mergedArticle, num) => {
-  // const prompt = `"""Below is some Content. Using ${mergedArticle.numWords + (num * 5)} words, expand the content by inserting ${num} eye-catching subheadings inside the content.
+const addSubheadings = async (mergedArticle, num, factLinks) => {
+
+  // const prompt = `"""Below is some Content. Using ${mergedArticle.numWords + 100} words, rewrite the content using HTML. Use headings, subheadings, tables, bullet points, paragraphs, and bold to organize the information.
   
   // Content:
   // ${mergedArticle.content}"""
   // `
-
-  const prompt = `"""Below is some Content. Using ${mergedArticle.numWords + 100} words, rewrite the content using HTML. Use headings, subheadings, tables, bullet points, paragraphs, and bold to organize the information.
+  
+  const prompt = `"""Below is some Content and FactLinks. Using ${mergedArticle.numWords + 100} words, rewrite the content using HTML by incorporating ${Math.ceil(factLinks.length / 3)} FactLinks verbatim, as-is.
+  
+  [Format Guide: Use headings, subheadings, tables, bullet points, paragraphs, links, and bold to organize the information. There must be a minimum of ${Math.ceil(factLinks.length / 3)} FactLinks included.] 
   
   Content:
-  ${mergedArticle.content}"""
-  `
+  ${mergedArticle.content}
   
+  FactLinks:
+  ${factLinks.join("\n")}"""
+  `
   console.log('PROMPT', prompt);
   return await ai.getChatText(prompt);
 }
@@ -410,6 +417,20 @@ const extractSubheadingSections = html => {
 
   return h2s;
   
+}
+
+const expandSubsection = async (mergedArticle, subheadingIndex, factLinks) => {
+  const prompt = `"""I need to add relevant FactLinks to the provided Text. Expand the provided Text by incorporating two FactLinks that are relevant to the Text. If none on the FactLinks are relevant to the Text then return the entire Text as is.
+  
+  Text:
+  ${mergedArticle.subheadings[subheadingIndex]}
+
+  FactLink: ${factLinks.join("\nFactLink: ")}"""
+  `
+
+  console.log(prompt);
+
+  mergedArticle.expandedSubheadings[subheadingIndex] = await ai.getChatText(prompt);
 }
 
 const processMix = async (mix, socket) => {
@@ -619,21 +640,32 @@ const processMix = async (mix, socket) => {
   mergedArticle.numWords = mergedArticle.content.split(" ").length;
   mergedArticle.numTokens = nlp.numGpt3Tokens(mergedArticle.content);
   
-  console.log('MERGED ARTICLE', mergedArticle);
+ 
 
   console.log('awaiting adding subheadings');
 
-  mergedArticle.withSubheadings = await addSubheadings(mergedArticle, 4);
+  mergedArticle.withSubheadings = await addSubheadings(mergedArticle, 4, factLinks);
 
- 
+  console.log('MERGED ARTICLE', mergedArticle);
 
   socket.emit('rawArticle', {rawArticle: mergedArticle.withSubheadings});
+
+  return;
 
   mergedArticle.subheadings = extractSubheadingSections(mergedArticle.withSubheadings);
 
   console.log(mergedArticle);
-  // mergedArticle.expandedSubheadings = await expandSubheadings(mergedArticle.subheadings, factLinks)
 
+  mergedArticle.expandedSubheadings = [];
+  promises = [];
+  for (let i = 0; i < mergedArticle.subheadings.length; ++i) {
+    promises.push(expandSubsection(mergedArticle, i, factLinks ));
+  }
+
+  console.log('awaiting expanding subsections', promises.length);
+  await Promise.all(promises);
+
+  console.log('MERGED ARTICLE WITH EXPANDED SUBHEADINGS', mergedArticle)
 
   return;
 
