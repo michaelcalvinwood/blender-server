@@ -490,6 +490,14 @@ const processMix = async (mix, socket) => {
 
   articleChunks.sort((a, b) => (a.infoTokens + a.factsTokens) - (b.infoTokens + b.factsTokens));
   console.log('ARTICLE CHUNKS', JSON.stringify(articleChunks, null, 4));
+
+  const factLinks = [];
+  for (let i = 0; i < articleChunks.length; ++i) {
+    for (let j = 0; j < articleChunks[i].factLinks.length; ++j)
+      factLinks.push(articleChunks[i].factLinks[j]);
+  }
+  
+  console.log('FACT LINKS', factLinks);
   
   return;
 
