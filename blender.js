@@ -271,11 +271,49 @@ const addSubheadings = async (mergedArticle, num) => {
   return await ai.getChatText(prompt);
 }
 
+const getFactLink = (fact, keywords, url) => {
+  let index = -1;
+  let len = 0;
+
+  for (let i = 0; i < keywords.length; ++i) {
+    if (keywords[i].length > len) {
+      index = i;
+      len = keywords[i].length;
+    }
+  }
+
+  if (index === -1) return false;
+
+  let loc = fact.toLowerCase().indexOf(keywords[index].toLowerCase());
+
+  if (loc === -1) return false;
+
+  let left = fact.substring(0, loc);
+  let middle = fact.substring(loc, loc + keywords[index].length);
+  let right = fact.substring(loc + keywords[index].length);
+
+  let link = `${left}<a href="${url}" target="_blank">${middle}</a>${right}`;
+
+  return link;
+  
+}
+
 const getFactsTokens = part => {
   const factList = [];
-  for (let i = 0; i < part.keyFacts.length; ++i) factList.push(part.keyFacts[i].fact);
+  const factLinks = [];
+
+  for (let i = 0; i < part.keyFacts.length; ++i) {
+    factList.push(part.keyFacts[i].fact);
+    const factLink = getFactLink(part.keyFacts[i].fact, part.keyFacts[i].keywords, part.url);
+    if (factLink !== false) factLinks.push(factLink);
+  }
+
+  console.log(factLinks);
+
   part.factList = factList.join("\n");
   part.factsTokens = nlp.numGpt3Tokens(part.factList);
+  part.factLinks = factLinks;
+
 }
 
 const writeArticlePart = async (part, topic, outputType, article, index, location) => {
@@ -429,6 +467,7 @@ const processMix = async (mix, socket) => {
           source: mix.content[i].source,
           title: mix.content[i].title,
           type: mix.content[i].type,
+          subType: typeof mix.content[i].subType !== 'undefined' ? mix.content[i].subType : '',
           url: mix.content[i].url,
           info: mix.content[i].info[j].info,
           keyFacts: mix.content[i].info[j].facts,
@@ -440,7 +479,7 @@ const processMix = async (mix, socket) => {
   }
 
   /*
-   * get factList and factsTokens
+   * get factList, factsTokens, factLinks, and quoteLinks
    */
 
   for (let i = 0; i < articleChunks.length; ++i) getFactsTokens(articleChunks[i]);
@@ -451,6 +490,7 @@ const processMix = async (mix, socket) => {
 
   articleChunks.sort((a, b) => (a.infoTokens + a.factsTokens) - (b.infoTokens + b.factsTokens));
   console.log('ARTICLE CHUNKS', JSON.stringify(articleChunks, null, 4));
+  
   return;
 
   /*
