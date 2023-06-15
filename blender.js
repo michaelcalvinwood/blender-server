@@ -823,11 +823,13 @@ const getInfoLinks = async (mix, i, j, numChunks) => {
     return;
   }
 
+  const numFacts = 20;
+
   if (mix.topic) {
-    prompt = `"""Below is some Text. I need you return 15 facts from the text that are relevant to the following topic: ${mix.topic}. Solely return facts that are relevant to that topic.
+    prompt = `"""Below is some Text. I need you return ${numFacts} facts from the text that are relevant to the following topic: ${mix.topic}. Solely return facts that are relevant to that topic.
     I also need you to return a list of all third-party quotes that are relevant to the following topic: ${mix.topic}.
     The return format must be stringified JSON in the following format: {
-      facts: array of 15 facts that related to the topic '${mix.topic}' goes here,
+      facts: array of ${numFacts} facts that related to the topic '${mix.topic}' goes here,
       quotes: array of third-party quotes in the following format {
         speaker: the identity of the speaker goes here,
         affiliation: the organization that the speaker is affiliated with goes here,
@@ -1171,8 +1173,6 @@ const processMixLinksAndQuotes = async (mix, socket) => {
 
   console.log("QUOTE LIST", quotesList);
 
-  return;
-
   let prompt = `"""Below is a list of facts from various Source IDs. Using 1300 words, write a highly dynamic, engaging news article regarding the following topic: ${mix.topic}.
   [Format Guide: Annotate each and every sentence in the returned content with the Source ID for that sentence.]
   
@@ -1188,12 +1188,26 @@ const processMixLinksAndQuotes = async (mix, socket) => {
    */
 
 
+  prompt = `"""[Content Guide: Below is an Article with the sentences annotated with the Source ID denoting where the sentence comes from. Also below are quotes along with their Source IDs.]
+  
+  [Instructions: Using 1000 words, expand the Article below longer by incorporating quotes that are relevant to the following topic: ${mix.topic}. Be sure to preserve the Source IDs of the facts from the article. Also be sure to append the source ID to the end of each quote used.]
+
+  [Article]
+  ${article}
+
+  [Quotes]
+  ${quotesList}
+  `
+
+  const quoteArticle = await ai.getDivinciResponse(prompt);
+
+  console.log("QUOTE ARTICLE", quoteArticle);
 
   prompt = `"""Below is an article with the source of each fact annotated. Using 1300 words, write a very engaging, dynamic article preserving the source annotations for each fact.
   [Format Guide: The return format should be in HTML using subheadings for oranization.]
   
   Article:
-  ${article}"""
+  ${quoteArticle}"""
   `
 
   const refinedArticle = await ai.getDivinciResponse(prompt);
