@@ -810,7 +810,7 @@ const processMix = async (mix, socket) => {
 
 }
 
-const getInfoLinks = async (mix, i, j, numChunks) => {
+const getInfoLinks = async (mix, i, j, numFacts = 20) => {
   let info = mix.content[i].chunks[j];
 
   if (!info) {
@@ -822,8 +822,6 @@ const getInfoLinks = async (mix, i, j, numChunks) => {
 
     return;
   }
-
-  const numFacts = 20;
 
   if (mix.topic) {
     prompt = `"""Below is some Text. I need you return ${numFacts} facts from the text that are relevant to the following topic: ${mix.topic}. Solely return facts that are relevant to that topic.
@@ -937,7 +935,7 @@ const processMixLinks = async (mix, socket) => {
   for (let i = 0; i < mix.content.length; ++i) {
     mix.content[i].info = [];
     for (let j = 0; j < mix.content[i].chunks.length; ++j) {
-      promises.push(getInfoLinks(mix, i, j, mix.content[i].chunks.length))
+      promises.push(getInfoLinks(mix, i, j, 20))
     }
   }
 
@@ -977,7 +975,7 @@ const processMixLinks = async (mix, socket) => {
   console.log(accordingToList);
 
   numTokens = getNumAccordingToTokens(accordingToList);
-  //console.log('numTokens', numTokens);
+  console.log('INITIAL TOKENS', numTokens);
 
   while (numTokens > 2000) {
     randomlyRemoveFact(accordingToList);
@@ -986,6 +984,11 @@ const processMixLinks = async (mix, socket) => {
   }
   
   console.log(accordingToList);
+
+  console.log('AccordingToList NUM TOKENS', numTokens);
+  console.log('AccordingToList NUM WORDS', accordingToList.join("\n").split(' ').length);
+
+  return;
   
   let sourceList = '';
   let curId = '---';
@@ -1088,7 +1091,6 @@ const processMixLinksAndQuotes = async (mix, socket) => {
   console.log('mix.content', JSON.stringify(mix.content, null, 4));
 
   let accordingToList = [];
-  let quoteList = [];
 
   for (let i = 0; i < mix.content.length; ++i) {
     for (let j = 0; j < mix.content[i].info.length; ++j) {
@@ -1108,7 +1110,7 @@ const processMixLinksAndQuotes = async (mix, socket) => {
 
           const statement = quote.quote.startsWith('"') ? quote.quote : `"${quote.quote}"`;
 
-          quoteList.push({id: mix.content[i].id, fact: `${full} ${statement}`})
+          accordingToList.push({id: mix.content[i].id, fact: `${full} ${statement}`})
         }
       }
     }
@@ -1126,52 +1128,24 @@ const processMixLinksAndQuotes = async (mix, socket) => {
   }
   
   console.log(accordingToList);
-  
+  console.log('AccordingToList NUM TOKENS', numTokens);
+  console.log('AccordingToList NUM WORDS', accordingToList.split(' ').length);
+
+  return;
   let sourceList = '';
   let curId = '---';
+
   let num = 0;
-
-  /*
-   * Create source map to reduce tokens
-   */
-
-  const sourceMap = {};
-
   for (let i = 0; i < accordingToList.length; ++i) {
     if (curId !== accordingToList[i].id) {
-      ++num;
+      //sourceList += i > 0 ? `\nSource ${accordingToList[i].id}:\n` : `Source ${accordingToList[i].id}:\n`;
+      sourceList += i > 0 ? `\nSource ${++num}:\n` : `Source ${++num}:\n`;
       curId = accordingToList[i].id;
-      sourceMap[curId] = num;
-      sourceMap[num.toString()] = curId;
-    }
-  }
-
-  curId = '---';
-  
-  for (let i = 0; i < accordingToList.length; ++i) {
-    if (curId !== accordingToList[i].id) {
-      curId = accordingToList[i].id;
-      let mappedId = sourceMap[curId];
-      sourceList += i > 0 ? `\nSource ${mappedId}:\n` : `Source ${mappedId}:\n`;
     }
     sourceList += `\t${accordingToList[i].fact}\n`;
   }
 
-  console.log("SOURCE LIST", sourceList);
-
-  let quotesList = '';
-  curId = '---';
-  for (let i = 0; i < quoteList.length; ++i) {
-    console.log(i, quoteList.length);
-    if (curId !== quoteList[i].id) {
-      curId = quoteList[i].id;
-      let mappedId = sourceMap[curId];
-      quotesList += quotesList ? `\nSource ${mappedId}:\n` : `Source ${mappedId}:\n`;
-    }
-    quotesList += `\t${quoteList[i].fact}\n`;
-  }
-
-  console.log("QUOTE LIST", quotesList);
+  console.log(sourceList);
 
   let prompt = `"""Below is a list of facts from various Source IDs. Using 1300 words, write a highly dynamic, engaging news article regarding the following topic: ${mix.topic}.
   [Format Guide: Annotate each and every sentence in the returned content with the Source ID for that sentence.]
@@ -1181,33 +1155,13 @@ const processMixLinksAndQuotes = async (mix, socket) => {
 
   let article = await ai.getDivinciResponse(prompt);
 
-  console.log("INITIAL ARTICLE", article);
-
-  /*
-   * Add quotes here
-   */
-
-
-  prompt = `"""[Content Guide: Below is an Article with the sentences annotated with the Source ID denoting where the sentence comes from. Also below are quotes along with their Source IDs.]
-  
-  [Instructions: Using 1000 words, expand the Article below longer by incorporating quotes that are relevant to the following topic: ${mix.topic}. Be sure to preserve the Source IDs of the facts from the article. Also be sure to append the source ID to the end of each quote used.]
-
-  [Article]
-  ${article}
-
-  [Quotes]
-  ${quotesList}
-  `
-
-  const quoteArticle = await ai.getDivinciResponse(prompt);
-
-  console.log("QUOTE ARTICLE", quoteArticle);
+  console.log("ARTICLE", article);
 
   prompt = `"""Below is an article with the source of each fact annotated. Using 1300 words, write a very engaging, dynamic article preserving the source annotations for each fact.
   [Format Guide: The return format should be in HTML using subheadings for oranization.]
   
   Article:
-  ${quoteArticle}"""
+  ${article}"""
   `
 
   const refinedArticle = await ai.getDivinciResponse(prompt);
@@ -1217,13 +1171,14 @@ const processMixLinksAndQuotes = async (mix, socket) => {
 }
 
 const handleSocketEvents = async socket => {
-  socket.on('mix', (mix) => processMixLinksAndQuotes(mix, socket))
+  socket.on('mix', (mix) => processMixLinks(mix, socket))
 }
 
 const httpsServer = https.createServer({
     key: fs.readFileSync(privateKeyPath),
     cert: fs.readFileSync(fullchainPath),
   }, app);
+  
 
   httpsServer.listen(listenPort, '0.0.0.0', () => {
     console.log(`HTTPS Server running on port ${listenPort}`);
