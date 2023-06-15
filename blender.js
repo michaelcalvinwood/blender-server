@@ -1086,6 +1086,7 @@ const processMixLinksAndQuotes = async (mix, socket) => {
   console.log('mix.content', JSON.stringify(mix.content, null, 4));
 
   let accordingToList = [];
+  let quoteList = [];
 
   for (let i = 0; i < mix.content.length; ++i) {
     for (let j = 0; j < mix.content[i].info.length; ++j) {
@@ -1105,7 +1106,7 @@ const processMixLinksAndQuotes = async (mix, socket) => {
 
           const statement = quote.quote.startsWith('"') ? quote.quote : `"${quote.quote}"`;
 
-          accordingToList.push({id: mix.content[i].id, fact: `${full} ${statement}`})
+          quoteList.push({id: mix.content[i].id, fact: `${full} ${statement}`})
         }
       }
     }
@@ -1126,18 +1127,51 @@ const processMixLinksAndQuotes = async (mix, socket) => {
   
   let sourceList = '';
   let curId = '---';
-
   let num = 0;
+
+  /*
+   * Create source map to reduce tokens
+   */
+
+  const sourceMap = {};
+
   for (let i = 0; i < accordingToList.length; ++i) {
     if (curId !== accordingToList[i].id) {
-      //sourceList += i > 0 ? `\nSource ${accordingToList[i].id}:\n` : `Source ${accordingToList[i].id}:\n`;
-      sourceList += i > 0 ? `\nSource ${++num}:\n` : `Source ${++num}:\n`;
+      ++num;
       curId = accordingToList[i].id;
+      sourceMap[curId] = num;
+      sourceMap[num.toString()] = curId;
+    }
+  }
+
+  curId = '---';
+  
+  for (let i = 0; i < accordingToList.length; ++i) {
+    if (curId !== accordingToList[i].id) {
+      curId = accordingToList[i].id;
+      let mappedId = sourceMap[curId];
+      sourceList += i > 0 ? `\nSource ${mappedId}:\n` : `Source ${mappedId}:\n`;
     }
     sourceList += `\t${accordingToList[i].fact}\n`;
   }
 
-  console.log(sourceList);
+  console.log("SOURCE LIST", sourceList);
+
+  let quotesList = '';
+  curId = '---';
+  for (let i = 0; i < quoteList.length; ++i) {
+    console.log(i, quoteList.length);
+    if (curId !== quoteList[i].id) {
+      curId = quoteList[i].id;
+      let mappedId = sourceMap[curId];
+      quotesList += quotesList ? `\nSource ${mappedId}:\n` : `Source ${mappedId}:\n`;
+    }
+    quotesList += `\t${quoteList[i].fact}\n`;
+  }
+
+  console.log("QUOTE LIST", quotesList);
+
+  return;
 
   let prompt = `"""Below is a list of facts from various Source IDs. Using 1300 words, write a highly dynamic, engaging news article regarding the following topic: ${mix.topic}.
   [Format Guide: Annotate each and every sentence in the returned content with the Source ID for that sentence.]
@@ -1147,7 +1181,13 @@ const processMixLinksAndQuotes = async (mix, socket) => {
 
   let article = await ai.getDivinciResponse(prompt);
 
-  console.log("ARTICLE", article);
+  console.log("INITIAL ARTICLE", article);
+
+  /*
+   * Add quotes here
+   */
+
+
 
   prompt = `"""Below is an article with the source of each fact annotated. Using 1300 words, write a very engaging, dynamic article preserving the source annotations for each fact.
   [Format Guide: The return format should be in HTML using subheadings for oranization.]
@@ -1163,14 +1203,13 @@ const processMixLinksAndQuotes = async (mix, socket) => {
 }
 
 const handleSocketEvents = async socket => {
-  socket.on('mix', (mix) => processMixLinks(mix, socket))
+  socket.on('mix', (mix) => processMixLinksAndQuotes(mix, socket))
 }
 
 const httpsServer = https.createServer({
     key: fs.readFileSync(privateKeyPath),
     cert: fs.readFileSync(fullchainPath),
   }, app);
-  
 
   httpsServer.listen(listenPort, '0.0.0.0', () => {
     console.log(`HTTPS Server running on port ${listenPort}`);
