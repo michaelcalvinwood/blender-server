@@ -1,4 +1,4 @@
-const debug = false;
+const debug = true;
 
 require('dotenv').config();
 
@@ -119,7 +119,10 @@ exports.getDivinciResponse = async (prompt, output = 'text', temperature = .7) =
 
     while (!success) {
         try {
+            console.log('Fetching Divinci response');
             response = await axios(request);
+            console.log('Got Divinci response');
+            success = true;
             
         } catch (err) {
             console.error("axios err.data", err.response.status, err.response.statusText, err.response.data);
