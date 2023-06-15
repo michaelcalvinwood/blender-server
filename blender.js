@@ -973,12 +973,6 @@ const processMixLinks = async (mix, socket) => {
   }
 
   console.log(accordingToList);
-  //return;
-
-  // add third-party quotes
-
-
-
 
   numTokens = getNumAccordingToTokens(accordingToList);
   //console.log('numTokens', numTokens);
@@ -1029,6 +1023,144 @@ const processMixLinks = async (mix, socket) => {
   console.log('REFINED ARTICLE', refinedArticle);
 }
 
+const processMixLinksAndQuotes = async (mix, socket) => {
+  let outputType;
+  switch (mix.output.type) {
+    case 'news':
+      outputType = 'news article';
+      break;
+    case 'blog':
+      outputType = 'blog post';
+      break;
+    case 'summary':
+      outputType = 'summary';
+      break;
+    case 'outline':
+      outputType = 'outline';
+      break;
+    case 'marketing':
+      outputType = 'marketing collateral';
+      break;
+  }
+  
+  socket.emit('msg', {status: 'success', msg: 'Retrieving contents'});
+
+  /*
+   * get text
+   */
+  await extractText(mix);
+
+  socket.emit('text', mix.content);
+  socket.emit('msg', {status: 'success', msg: ''});
+
+  /*
+   * split text into chunks
+   */
+  for (let i = 0; i < mix.content.length; ++i) {
+    if (!mix.content[i].text) mix.content[i].chunks = [];
+    else mix.content[i].chunks = nlp.getTokenChunks(mix.content[i].text);
+  }
+
+  setTimeout(()=>{
+    socket.emit('msg', {status: 'success', msg: ''})
+    socket.emit('chunks', mix.content);
+  }, 5000);
+
+  /*
+   * Extract information from chunks
+   */
+
+  let promises = [];
+  for (let i = 0; i < mix.content.length; ++i) {
+    mix.content[i].info = [];
+    for (let j = 0; j < mix.content[i].chunks.length; ++j) {
+      promises.push(getInfoLinks(mix, i, j, mix.content[i].chunks.length))
+    }
+  }
+
+  console.log('awaiting info promises', promises.length);
+  await Promise.all(promises);
+
+  socket.emit('info', mix.content);
+
+  console.log('mix.content', JSON.stringify(mix.content, null, 4));
+
+  let accordingToList = [];
+
+  for (let i = 0; i < mix.content.length; ++i) {
+    for (let j = 0; j < mix.content[i].info.length; ++j) {
+      if (mix.content[i].info[j].facts) {
+        for (let k = 0; k < mix.content[i].info[j].facts.length; ++k) {
+          accordingToList.push({id: mix.content[i].id, fact: mix.content[i].info[j].facts[k]});
+        }
+      }
+      if (mix.content[i].info[j].quotes) {
+        for (let k = 0; k < mix.content[i].info[j].quotes.length; ++k) {
+          const quote = mix.content[i].info[j].quotes[k];
+          if (!quote.speaker && !quote.affiliation) continue;
+
+          let full = '';          
+          if (quote.speaker && quote.affiliation) full = `${quote.speaker}, ${quote.affiliation}, stated:`;
+          else full = quote.speaker ? `${quote.speaker} stated:` : `${quote.affiliation} stated: `;
+
+          const statement = quote.quote.startsWith('"') ? quote.quote : `"${quote.quote}"`;
+
+          accordingToList.push({id: mix.content[i].id, fact: `${full} ${statement}`})
+        }
+      }
+    }
+  }
+
+  console.log(accordingToList);
+
+  numTokens = getNumAccordingToTokens(accordingToList);
+  //console.log('numTokens', numTokens);
+
+  while (numTokens > 2000) {
+    randomlyRemoveFact(accordingToList);
+    numTokens = getNumAccordingToTokens(accordingToList);
+    //console.log('numTokens', numTokens);
+  }
+  
+  console.log(accordingToList);
+  
+  let sourceList = '';
+  let curId = '---';
+
+  let num = 0;
+  for (let i = 0; i < accordingToList.length; ++i) {
+    if (curId !== accordingToList[i].id) {
+      //sourceList += i > 0 ? `\nSource ${accordingToList[i].id}:\n` : `Source ${accordingToList[i].id}:\n`;
+      sourceList += i > 0 ? `\nSource ${++num}:\n` : `Source ${++num}:\n`;
+      curId = accordingToList[i].id;
+    }
+    sourceList += `\t${accordingToList[i].fact}\n`;
+  }
+
+  console.log(sourceList);
+
+  let prompt = `"""Below is a list of facts from various Source IDs. Using 1300 words, write a highly dynamic, engaging news article regarding the following topic: ${mix.topic}.
+  [Format Guide: Annotate each and every sentence in the returned content with the Source ID for that sentence.]
+  
+  ${sourceList}"""
+  `
+
+  let article = await ai.getDivinciResponse(prompt);
+
+  console.log("ARTICLE", article);
+
+  prompt = `"""Below is an article with the source of each fact annotated. Using 1300 words, write a very engaging, dynamic article preserving the source annotations for each fact.
+  [Format Guide: The return format should be in HTML using subheadings for oranization.]
+  
+  Article:
+  ${article}"""
+  `
+
+  const refinedArticle = await ai.getDivinciResponse(prompt);
+
+  socket.emit('rawArticle', {rawArticle: refinedArticle})
+  console.log('REFINED ARTICLE', refinedArticle);
+}
 
 const handleSocketEvents = async socket => {
   socket.on('mix', (mix) => processMixLinks(mix, socket))
