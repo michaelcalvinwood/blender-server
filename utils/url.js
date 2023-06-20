@@ -42,7 +42,8 @@ exports.getHTML = async url => {
     try {
       response = await axios(request);
     } catch (err) {
-      console.error('articleExtractor error:', err.response.status, err.response.status.text);
+      if (err.response && err.response.status) console.error('getHTML error:', err.response.status, err.response.status.text);
+      else console.error('getHTML error:', err);
       return false;
     }
   
