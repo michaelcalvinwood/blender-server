@@ -54,6 +54,22 @@ app.get('/', (req, res) => {
  * Socket Functions
  */
 
+const getTopics = async (text, num = 5) => {
+  const prompt = `'''Provide a list of of the  ${num === 1 ? 'most significant topic' : `${num} most significant topics`} contained in the following text. The returned format must be stringified JSON in the following format: {
+    "topics": array of topics goes here,
+    "numTopics": the number of topics goes here
+  }
+  
+  Text:
+  ${text}'''
+  `
+  console.log('prompt', prompt);
+  
+  const keywords = await ai.getChatJSON(prompt);
+
+  return keywords;
+}
+
 const addArticle = async (url, articles, index, topic, numParagraphs) => {
   const html = await urlUtils.getHTML(url);
   const article = await urlUtils.extractArticleFromHTML(html);
@@ -1749,13 +1765,13 @@ const test = async () => {
   
   Inflation is a complex issue that affects people in different ways in different parts of the US. While San Diego has one of the highest inflation rates in the nation, other regions, such as Minneapolis and Honolulu, have seen inflation ease toward historical averages. However, with housing being a major contributor to recent inflation increases, prices in other regions, such as Miami, Tampa, and Dallas, have seen a huge jump in shelter costs. For now, workers pay is staying ahead of inflation, but only time will tell how long this trend will last.`;
 
-  result = reduceSources(text);
+  const keywords = await getTopics(text);
 
-  console.log(result);
+  console.log('KEYWORDS', keywords);
 }
 
 const test2 = async () => {
   getPymntsSummariesForTopics (['inflation', 'digital payments']);
 }
 
-test2();
+test();
