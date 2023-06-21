@@ -54,12 +54,18 @@ app.get('/', (req, res) => {
  * Socket Functions
  */
 
-const addArticle = async (url, articles, index) => {
+const addArticle = async (url, articles, index, topic, numParagraphs) => {
   const html = await urlUtils.getHTML(url);
   const article = await urlUtils.extractArticleFromHTML(html);
   const text = urlUtils.getTextFromHTML(article);
-  console.log('article length', text.length);
-  articles[index] = text;
+
+  const prompt = `'''Below is an Article. In ${numParagraphs === 1 ? 'one paragraph' : `${numParagraphs} paragraphs`}, summarize the information in the article regarding the following topic: ${topic}. If there is no information regarding the following topic, solely respond with the word "none": ${topic} 
+  [Style Guide: Make sure the returned content is highly engaging and dynamic.]
+  
+  Article:
+  ${text}'''
+  `
+  articles[index] = await ai.getChatText(prompt);
 }
 
 const getPymntsWriteups = async (topic, numParagraphs = 2, numWriteups = 3) => {
@@ -73,7 +79,7 @@ const getPymntsWriteups = async (topic, numParagraphs = 2, numWriteups = 3) => {
     results = await search.google('news', topic, 'last_month', numWriteups);
     for (let i = 0; i < results.length; ++i) {
       let url = results[i].link;
-      promises.push(addArticle(url, articles, i));
+      promises.push(addArticle(url, articles, i, topic, numParagraphs));
     }
     await Promise.all(promises);
     return articles;
