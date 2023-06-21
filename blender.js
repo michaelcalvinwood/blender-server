@@ -54,14 +54,29 @@ app.get('/', (req, res) => {
  * Socket Functions
  */
 
+const addArticle = async (url, articles, index) => {
+  const html = await urlUtils.getHTML(url);
+  const article = await urlUtils.extractArticleFromHTML(html);
+  const text = urlUtils.getTextFromHTML(article);
+  console.log('article length', text.length);
+  articles[index] = text;
+}
 
 const getPymntsWriteups = async (topic, numParagraphs = 2, numWriteups = 3) => {
   let results;
 
   topic += " site:pymnts.com";
+  articles = [];
+  promises = [];
 
   try {
-    results = search.google('news', topic, 'last_month', numWriteups);
+    results = await search.google('news', topic, 'last_month', numWriteups);
+    for (let i = 0; i < results.length; ++i) {
+      let url = results[i].link;
+      promises.push(addArticle(url, articles, i));
+    }
+    await Promise.all(promises);
+    return articles;
   } catch (err) {
     console.error('getPymntsWriteups ERROR:', err);
   }
@@ -1718,9 +1733,9 @@ const test = async () => {
 }
 
 const test2 = async () => {
-  let result = await getPymntsWriteups('inflation');
+  let writeups = await getPymntsWriteups('inflation');
 
-  console.log(result);
+  writeups.forEach((writeup, index) => console.log(`ARTICLE ${index}: `, writeup));
 }
 
 test2();
