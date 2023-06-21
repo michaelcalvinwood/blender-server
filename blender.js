@@ -90,6 +90,22 @@ const getPymntsWriteups = async (topic, numParagraphs = 2, numWriteups = 3) => {
   return results;
 }
 
+const getSummary = async (summaries, index, topic, numParagraphs, numWriteups) => {
+  const writeups = await getPymntsWriteups(topic, numParagraphs, numWriteups);
+  summaries[index] = {
+    topic,
+    writeups
+  }
+}
+
+const getPymntsSummariesForTopics = async (topics, numParagraphs = 2, numWriteupsPerTopic = 3) => {
+  const promises = [];
+  const summaries = [];
+  topics.forEach((topic, index) => promises.push(getSummary(summaries, index, topic, numParagraphs, numWriteupsPerTopic)));
+  await Promise.all(promises);
+  console.log('SUMMARIES', summaries);  
+}
+
 const extractUrlText = async (mix, index) => {
   const url = mix.content[index].url;
 
@@ -1739,9 +1755,7 @@ const test = async () => {
 }
 
 const test2 = async () => {
-  let writeups = await getPymntsWriteups('inflation');
-
-  writeups.forEach((writeup, index) => console.log(`ARTICLE ${index}: `, writeup));
+  getPymntsSummariesForTopics (['inflation', 'digital payments']);
 }
 
 test2();
