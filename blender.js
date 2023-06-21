@@ -19,6 +19,7 @@ const ai = require('./utils/ai');
 const convert = require('./utils/conversion');
 const nlp = require('./utils/nlp');
 const dom = require('./utils/dom');
+const search = require('./utils/serpWow');
 
 const app = express();
 app.use(express.static('public'));
@@ -52,6 +53,21 @@ app.get('/', (req, res) => {
 /*
  * Socket Functions
  */
+
+
+const getPymntsWriteups = async (topic, numParagraphs = 2, numWriteups = 3) => {
+  let results;
+
+  topic += " site:pymnts.com";
+
+  try {
+    results = search.google('news', topic, 'last_month', numWriteups);
+  } catch (err) {
+    console.error('getPymntsWriteups ERROR:', err);
+  }
+
+  return results;
+}
 
 const extractUrlText = async (mix, index) => {
   const url = mix.content[index].url;
@@ -1701,4 +1717,10 @@ const test = async () => {
   console.log(result);
 }
 
-//test();
+const test2 = async () => {
+  let result = await getPymntsWriteups('inflation');
+
+  console.log(result);
+}
+
+test2();

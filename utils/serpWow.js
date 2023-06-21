@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 
 const {SERPWOW_KEY} = process.env;
 
-exports.google = async (type, query, timePeriod, num = 30) => {
+exports.google = async (type, query, timePeriod = 'last_month', num = 30) => {
     // set up the request parameters
     const params = {
         api_key: SERPWOW_KEY,
