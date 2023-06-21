@@ -810,14 +810,6 @@ const processMix = async (mix, socket) => {
 
 }
 
-const linkifyArticle = async (article, sourceMap) => {
-  const parseToken = uuidv4();
-
-  let loc = article.lastIndexOf('(Source');
-
-  return;
-  
-}
 
 const getInfoLinks = async (mix, i, j, numFacts = 20) => {
   let info = mix.content[i].chunks[j];
@@ -894,7 +886,9 @@ const randomlyRemoveFact = accordingToList => {
   accordingToList.splice(num, 1); 
 }
 
-const factifyTheArticle = async article => {
+const randomNumber = () => Math.floor(Math.random() * 1000);
+
+const linkify = article => {
   console.log("ARTICLE", article);
   const factMap = {};
 
@@ -902,7 +896,10 @@ const factifyTheArticle = async article => {
   let info = article.split(pattern);
   console.log('info', info);
 
-  const factifiedArticle = [];
+  if (info.length < 3) return false;
+
+  const linkifiedArticle = [];
+  let factNum = 1;
 
   for (let i = 0; i < info.length; i += 2) {
     let data = info[i];
@@ -912,8 +909,45 @@ const factifyTheArticle = async article => {
       let space = source.indexOf(' ');
       let sourceNumber = source.substring(space + 1, source.length - 1);
       console.log("Source Number", sourceNumber);
-      let factId = uuidv4();
-      factifiedArticle.push(`${data} [Fact ${factId}]`);
+
+      space = data.indexOf(' ', 10);
+      let link = `<a href="http://t${sourceNumber}.co?">${data.substring(0, space)}</a>${data.substring(space)}`
+      //let factId = uuidv4();
+      linkifiedArticle.push(link);
+    } else {
+      linkifiedArticle.push(data);
+    }
+  }
+
+  article = linkifiedArticle.join(' ');
+
+  return {
+    article,
+    factMap
+  }
+}
+
+const factifyTheArticle = article => {
+  console.log("ARTICLE", article);
+  const factMap = {};
+
+  let pattern = /(\(Source \d+\))/;
+  let info = article.split(pattern);
+  console.log('info', info);
+
+  const factifiedArticle = [];
+  let factNum = 1;
+
+  for (let i = 0; i < info.length; i += 2) {
+    let data = info[i];
+    let source = info[i+1];
+
+    if (i + 1 < info.length) {
+      let space = source.indexOf(' ');
+      let sourceNumber = source.substring(space + 1, source.length - 1);
+      console.log("Source Number", sourceNumber);
+      //let factId = uuidv4();
+      factifiedArticle.push(`${data} [Fact ${randomNumber()}]`);
     } else {
       factifiedArticle.push(data);
     }
@@ -921,19 +955,43 @@ const factifyTheArticle = async article => {
 
   article = factifiedArticle.join(' ');
 
-  let prompt = `"""Below is an article with the id of each fact annotated. Using 1300 words, write a very engaging, dynamic article preserving the source annotations for each fact.
-  [Format Guide: The return format should be in HTML using subheadings for oranization.]
-  
-  Article:
-  ${article}'''
-  `
-  
-  const refinedArticle = await ai.getDivinciResponse(prompt);
-  console.log('REFINED ARTICLE', refinedArticle);
+  return {
+    article,
+    factMap
+  }
+}
 
-  //const linkifiedArticle = await linkifyArticle(refinedArticle, sourceMap);
+const reduceSources = (article, maxCitations = 1) => {
+  console.log("ARTICLE", article);
+  const factMap = {};
+  const sourceCount = [];
 
- 
+  let pattern = /(\(Source \d+\))/;
+  let info = article.split(pattern);
+  console.log('info', info);
+
+  const factifiedArticle = [];
+  let factNum = 1;
+
+  for (let i = 0; i < info.length; i += 2) {
+    let data = info[i];
+    let source = info[i+1];
+
+    if (i + 1 < info.length) {
+      let space = source.indexOf(' ');
+      let sourceNumber = source.substring(space + 1, source.length - 1);
+      
+      sourceCount[sourceNumber] = typeof sourceCount[sourceNumber] === 'undefined' ? 1 : sourceCount[sourceNumber] + 1;
+      console.log("Source Number", sourceNumber, sourceCount);
+      
+      if (sourceCount[sourceNumber] <= maxCitations) factifiedArticle.push(`${data} [Fact ${randomNumber()}]`);
+      else factifiedArticle.push(data);
+    } else {
+      factifiedArticle.push(data);
+    }
+  }
+
+  article = factifiedArticle.join(' ').replaceAll(' .', '.').replaceAll(' ,', ',');
 
   return {
     article,
@@ -1375,32 +1433,39 @@ const processMixLinks = async (mix, socket) => {
   console.log(sourceList);
   console.log('SOURCE MAP', sourceMap);
 
-  let prompt = `'~~~Below is a list of facts from various Source IDs. Using 1100 words, write a highly dynamic, engaging news article regarding the following topic: ${mix.topic}. 
-  Each and every sentence of the returned content must be annotated with the Source ID for that sentence.
+  let count = 0;
+  let successFlag = false;
+  let factifiedArticle;
+
+  while (count < 5 && !successFlag) {
+    console.log("TRYING", count);
+
+    let prompt = `'~~~Below is a list of facts from various Source IDs. Using 1100 words, write a highly dynamic, engaging news article regarding the following topic: ${mix.topic}. 
+    Each and every sentence of the returned content must be annotated with the Source ID for that sentence.
+    
+    ${sourceList}~~~\n`
   
-  ${sourceList}~~~\n`
+    let article = await ai.getDivinciResponse(prompt);
+  
+    console.log("ARTICLE", article);
+  
+    factifiedArticle = factifyTheArticle(article);
+    console.log('REDUCED SOURCE ARTICLE', factifiedArticle);
+  
+    if (factifiedArticle === false) ++count;
+    else successFlag = true;
+  }
 
-  let article = await ai.getDivinciResponse(prompt);
-
-  console.log("ARTICLE", article);
-
-  let factifiedArticle = factifyTheArticle(article);
   article = factifiedArticle.article;
 
 
-  // prompt = `"""Below is an article with the source of each fact annotated. Using 1300 words, write a very engaging, dynamic article preserving the source annotations for each fact.
-  // [Format Guide: The return format should be in HTML using subheadings for oranization.]
-  
-  // Article:
-  // ${article}'''
-  // `
-
-  prompt = `"""Below is an article with the id of each fact annotated. Using 1300 words, write a very engaging, dynamic article preserving the source annotations for each fact.
+  prompt = `"""Below is an article with the source of each fact annotated. Using 1300 words, create a very engaging, dynamic article while preserving the source annotations for each fact.
   [Format Guide: The return format should be in HTML using subheadings for oranization.]
   
   Article:
   ${article}'''
   `
+
   
   const refinedArticle = await ai.getDivinciResponse(prompt);
   console.log('REFINED ARTICLE', refinedArticle);
@@ -1555,6 +1620,7 @@ const processMixLinks = async (mix, socket) => {
 
 const handleSocketEvents = async socket => {
   socket.on('mix', (mix) => processMixLinks(mix, socket))
+  //socket.on('mix', (mix) => processMix(mix, socket))
 }
 
 const httpsServer = https.createServer({
@@ -1595,15 +1661,44 @@ io.on('connection', (socket) => {
 
 
 const test = async () => {
-  let text = `Inflation has been a major issue in the United States for the past two years, and it's showing no signs of slowing down. According to The New York Times' Jeanna Smialek, who covers the Federal Reserve and the U.S. economy, the decline in inflation may be a result of careful policymaking, or more of a lucky accident. Monthly inflation is now less than half of what it was last summer, but it started to take off in early 2021 as changes in spending patterns tied to the pandemic caught companies off guard and roiled supply chains. Falling prices for gas and groceries have been a big help to the Federal Reserve (Source 1).
+  let text = `Inflation has been on the rise across the US for the past two years, with San Diego having one of the highest inflation rates in the nation. According to the US Bureau of Labor Statistics, San Diego County prices increased 5.2 percent in the 12 months ending in May (Source 1). Tampa had the highest inflation rate, up 7.3 percent, while Minneapolis had the lowest rate, 1.8 percent, and urban Hawaii was 2 percent (Source 1). San Diego County's inflation rate was pushed up the last two months by cereal and bakery products, rent, and used car prices going up again (Source 1). In contrast, the Twin Cities had a 1.8% inflation rate in May, while Honolulu had a 2% inflation rate (Source 3).
 
-  In the Twin Cities, the Consumer Price Index rose only 1.8% in May year-over-year, indicating that two years of red-hot inflation may finally be cooling off (Source 2). Prices are actually decreasing in several categories in the Twin Cities, with natural gas prices declining 10.2% between March and May, and the cost of cereal and baked goods falling 4.9%.
+  Alan Gin, an economist at the University of San Diego, said higher numbers in San Diego have been the result of electricity and housing costs (Source 1). San Diego could have more pressure on housing costs than other areas of California because its population isn't dropping (Source 1). San Diego County added 1,254 people, while Los Angeles County lost 90,704; San Francisco County lost 2,816; and Orange County lost 9,821 (Source 1). The highest inflation rise in San Diego County in recent years was 8.3 percent in May (Source 1). Chicago Fed economists stated that housing is the main driver of regional differences in inflation (Source 3).
   
-  However, inflation hit a 40-year high in 2022, with cities in Florida topping WalletHub's list of cities where inflation is rising the most (Source 3). Miami was No. 1 on the list, with its consumer price index increasing by 9%, while Tampa, Florida, ranked fourth on the list with its CPI increasing by 7.7%. In New York City, inflation growth was much lower, with the CPI increasing by only 3.7%. WalletHub's Jill Gonzalez explains that New York has a higher baseline cost of living and, consequently, inflation has less room to grow. In addition to housing, other costs of living have increased, with electricity and other utilities being some of the biggest drivers of inflation (Source 3).
+  The Consumer Price Index rose only 1.8% in the Twin Cities year over year in May as two years of red-hot inflation finally looks to be cooling off (Source 2). Prices are actually decreasing in several categories in the Twin Cities, such as natural gas prices (down 10.2%), cereal and baked goods (down 4.9%), fruits and vegetables (down 2%), and household furnishing prices (down 3.6%) (Source 2).
   
-  It remains to be seen whether the decline in inflation is a result of careful policymaking or more of a lucky accident. But, with prices for gas and groceries decreasing and the cost of living rising in many cities, it is clear that inflation is still a major issue in the United States.  (Source 1).`;
+  The Fed has been raising interest rates for 15 months in hopes of quelling the hottest inflation since the 1980s (Source 3). The primary factor driving these geographic variations in inflation is housing (Source 3). Residents of the Midwest generally spend a smaller share of their budgets on keeping a roof over their head than people in the Northeast or West (Source 3). With housing a huge contributor to recent inflation increases, inflation in the Midwest has been more muted this year (Source 3).
+  
+  Transportation is another factor in inflation's regional differences, exacerbated last year as the price of gasoline and used cars skyrocketed (Source 3). Just as cities with more housing can better withstand shelter inflation, a city with a robust mass transit system will depend less on car and motor fuel prices than a region where most people drive (Source 3).
+  
+  Thanks in part to a population exodus during the pandemic, prices in Honolulu have risen at a slower pace than elsewhere around the US (Source 3). Annual inflation there peaked at 7.5% in March of last year, four months before the nation's inflation rate hit 9.1% (Source 3). Since then, falling population, combined with an increase in housing, helped shelter costs in the area grow only modestly—and, with prices for energy and used cars and trucks falling, overall inflation fell to a 2% rate last month (Source 3). Likewise, increased housing construction in Minnesota's Twin Cities has helped ease price increases (Source 3). The cost of shelter there is rising at just 4% a year, half the national rate (Source 3).
+  
+  On the plus side for San Diegans, inflation rose 0.9 percent in April and May, its lowest two-month rise this year (Source 1). When volatile food and energy costs are removed from the overall inflation rate, San Diego County had a 7.1 percent yearly increase (Source 1). Across the nation in March, the West had the biggest annual rise at 4.5 percent, outpacing the South (4.4 percent), Midwest (3.7 percent) and Northeast (3.1 percent) (Source 1).
+  
+  Workers pay is finally staying ahead of inflation, as real earnings in May turned positive for the first time in over two years (Source 3). Inflation falls in May to lowest level in 2 years (Source 3). Transportation costs, which include automobile maintenance, vehicle parts and car insurance, were down 3.1 percent (Source 1). Medical care costs were up 4.6 percent (Source 1). Apparel costs were up 10.2 percent (Source 1).
+  
+  Inflation is a complex issue that affects people in different ways in different parts of the US. While San Diego has one of the highest inflation rates in the nation, other regions, such as Minneapolis and Honolulu, have seen inflation ease toward historical averages. However, with housing being a major contributor to recent inflation increases, prices in other regions, such as Miami, Tampa, and Dallas, have seen a huge jump in shelter costs. For now, workers pay is staying ahead of inflation, but only time will tell how long this trend will last.
+  ARTICLE Inflation has been on the rise across the US for the past two years, with San Diego having one of the highest inflation rates in the nation. According to the US Bureau of Labor Statistics, San Diego County prices increased 5.2 percent in the 12 months ending in May (Source 1). Tampa had the highest inflation rate, up 7.3 percent, while Minneapolis had the lowest rate, 1.8 percent, and urban Hawaii was 2 percent (Source 1). San Diego County's inflation rate was pushed up the last two months by cereal and bakery products, rent, and used car prices going up again (Source 1). In contrast, the Twin Cities had a 1.8% inflation rate in May, while Honolulu had a 2% inflation rate (Source 3).
+  
+  Alan Gin, an economist at the University of San Diego, said higher numbers in San Diego have been the result of electricity and housing costs (Source 1). San Diego could have more pressure on housing costs than other areas of California because its population isn't dropping (Source 1). San Diego County added 1,254 people, while Los Angeles County lost 90,704; San Francisco County lost 2,816; and Orange County lost 9,821 (Source 1). The highest inflation rise in San Diego County in recent years was 8.3 percent in May (Source 1). Chicago Fed economists stated that housing is the main driver of regional differences in inflation (Source 3).
+  
+  The Consumer Price Index rose only 1.8% in the Twin Cities year over year in May as two years of red-hot inflation finally looks to be cooling off (Source 2). Prices are actually decreasing in several categories in the Twin Cities, such as natural gas prices (down 10.2%), cereal and baked goods (down 4.9%), fruits and vegetables (down 2%), and household furnishing prices (down 3.6%) (Source 2).
+  
+  The Fed has been raising interest rates for 15 months in hopes of quelling the hottest inflation since the 1980s (Source 3). The primary factor driving these geographic variations in inflation is housing (Source 3). Residents of the Midwest generally spend a smaller share of their budgets on keeping a roof over their head than people in the Northeast or West (Source 3). With housing a huge contributor to recent inflation increases, inflation in the Midwest has been more muted this year (Source 3).
+  
+  Transportation is another factor in inflation's regional differences, exacerbated last year as the price of gasoline and used cars skyrocketed (Source 3). Just as cities with more housing can better withstand shelter inflation, a city with a robust mass transit system will depend less on car and motor fuel prices than a region where most people drive (Source 3).
+  
+  Thanks in part to a population exodus during the pandemic, prices in Honolulu have risen at a slower pace than elsewhere around the US (Source 3). Annual inflation there peaked at 7.5% in March of last year, four months before the nation's inflation rate hit 9.1% (Source 3). Since then, falling population, combined with an increase in housing, helped shelter costs in the area grow only modestly—and, with prices for energy and used cars and trucks falling, overall inflation fell to a 2% rate last month (Source 3). Likewise, increased housing construction in Minnesota's Twin Cities has helped ease price increases (Source 3). The cost of shelter there is rising at just 4% a year, half the national rate (Source 3).
+  
+  On the plus side for San Diegans, inflation rose 0.9 percent in April and May, its lowest two-month rise this year (Source 1). When volatile food and energy costs are removed from the overall inflation rate, San Diego County had a 7.1 percent yearly increase (Source 1). Across the nation in March, the West had the biggest annual rise at 4.5 percent, outpacing the South (4.4 percent), Midwest (3.7 percent) and Northeast (3.1 percent) (Source 1).
+  
+  Workers pay is finally staying ahead of inflation, as real earnings in May turned positive for the first time in over two years (Source 3). Inflation falls in May to lowest level in 2 years (Source 3). Transportation costs, which include automobile maintenance, vehicle parts and car insurance, were down 3.1 percent (Source 1). Medical care costs were up 4.6 percent (Source 1). Apparel costs were up 10.2 percent (Source 1).
+  
+  Inflation is a complex issue that affects people in different ways in different parts of the US. While San Diego has one of the highest inflation rates in the nation, other regions, such as Minneapolis and Honolulu, have seen inflation ease toward historical averages. However, with housing being a major contributor to recent inflation increases, prices in other regions, such as Miami, Tampa, and Dallas, have seen a huge jump in shelter costs. For now, workers pay is staying ahead of inflation, but only time will tell how long this trend will last.`;
 
-  await factifyTheArticle(text);
+  result = reduceSources(text);
+
+  console.log(result);
 }
 
 //test();
