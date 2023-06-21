@@ -316,9 +316,9 @@ const mergeArticleParts = async (articleParts, topic) => {
   ${articles}"""
   `
   } else {
-    prompt = `"""Below are ${articleParts.length} Articles. Using 800 words, rewrite these articles into a one highly engaging and dynamic 1100-word article about the following topic: ${topic}.
+    prompt = `"""Below are ${articleParts.length} Articles. Use the information in these articles to write a highly dynamic and engaging 1100-word article about the following topic: ${topic}.
 
-    [Content Guide: Make sure the returned content solely includes information related to the following topic: ${topic}.]
+    [Content Guide: Make sure the returned content solely includes information related to the following topic: ${topic}. Make sure the returned content is solely based on the provided articles. Make sure the return content length is approximately 1100 words.]
   
   ${articles}"""
   `
@@ -505,6 +505,15 @@ const expandSubsection = async (mergedArticle, subheadingIndex, factLinks) => {
   console.log(prompt);
 
   mergedArticle.expandedSubheadings[subheadingIndex] = await ai.getChatText(prompt);
+}
+
+const attachPymnts = async (article, socket) => {
+
+  const keywords = await getTopics(article);
+
+  console.log('KEYWORDS', keywords);
+
+  socket.emit('rawArticle', {rawArticle: article})
 }
 
 const processMix = async (mix, socket) => {
@@ -737,6 +746,8 @@ const processMix = async (mix, socket) => {
   mergedArticle.withSubheadings = await addSubheadings(mergedArticle, 4, factLinks);
 
   console.log('MERGED ARTICLE', mergedArticle);
+
+  return attachPymnts(mergedArticle.withSubheadings, socket);
 
   socket.emit('rawArticle', {rawArticle: mergedArticle.withSubheadings});
 
@@ -1535,13 +1546,13 @@ const processMixLinks = async (mix, socket) => {
   ${article}'''
   `
 
-  
+
   const refinedArticle = await ai.getDivinciResponse(prompt);
   console.log('REFINED ARTICLE', refinedArticle);
 
   //const linkifiedArticle = await linkifyArticle(refinedArticle, sourceMap);
 
-  socket.emit('rawArticle', {rawArticle: refinedArticle})
+  attachPymnts(refinedArticle, socket);
   
   
 }
@@ -1688,8 +1699,8 @@ const processMixLinks = async (mix, socket) => {
 // }
 
 const handleSocketEvents = async socket => {
-  socket.on('mix', (mix) => processMixLinks(mix, socket))
-  //socket.on('mix', (mix) => processMix(mix, socket))
+  //socket.on('mix', (mix) => processMixLinks(mix, socket))
+  socket.on('mix', (mix) => processMix(mix, socket))
 }
 
 const httpsServer = https.createServer({
