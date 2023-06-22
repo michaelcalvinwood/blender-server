@@ -24,7 +24,8 @@ exports.urlType = url => {
     return extension;
 }
 
-exports.getHTML = async url => {
+exports.getHTML = async (url, debugMe = false) => {
+  console.log('url getHTML', url);
   let request = {
       url: 'http://api.scraperapi.com',
       params: {
@@ -47,7 +48,7 @@ exports.getHTML = async url => {
       return false;
     }
 
-    console.log('RESPONSE DATA', response.data);
+    if (debugMe) console.log('RESPONSE DATA', response.data);
   
     return response.data;
 }

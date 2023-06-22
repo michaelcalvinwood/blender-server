@@ -137,10 +137,20 @@ const addArticle = async (url, articles, index, topic, numParagraphs) => {
   Article:
   ${text}'''
   `
-  articles[index] = await ai.getChatText(prompt);
+  const result = await ai.getChatText(prompt);
+
+  if (result === false) return false;
+  
+  console.log(`ARTICLES[${index}] ${topic}:`, result.substring(0, 128));
+  articles[index] = {
+    text: result,
+    url,
+    topic
+  }
 }
 
-const getPymntsWriteups = async (topic, numParagraphs = 2, numWriteups = 3) => {
+const getPymntsWriteups = async (content, topic, numParagraphs = 2, numWriteups = 3) => {
+  console.log('getPymntsWriteups', topic);
   let results;
 
   topic += " site:pymnts.com";
@@ -151,9 +161,10 @@ const getPymntsWriteups = async (topic, numParagraphs = 2, numWriteups = 3) => {
     results = await search.google('news', topic, 'last_month', numWriteups);
     for (let i = 0; i < results.length; ++i) {
       let url = results[i].link;
-      promises.push(addArticle(url, articles, i, topic, numParagraphs));
+      promises.push(addArticle(url, content, i, topic, numParagraphs));
     }
     await Promise.all(promises);
+    console.log('getPymntsWriteups', topic, articles);
     return articles;
   } catch (err) {
     console.error('getPymntsWriteups ERROR:', err);
@@ -162,20 +173,26 @@ const getPymntsWriteups = async (topic, numParagraphs = 2, numWriteups = 3) => {
   return results;
 }
 
-const getSummary = async (summaries, index, topic, numParagraphs, numWriteups) => {
-  const writeups = await getPymntsWriteups(topic, numParagraphs, numWriteups);
-  summaries[index] = {
-    topic,
-    writeups
-  }
+const getPymntsSummary = async (content, topic, numParagraphs, numWriteups) => {
+  console.log('getPymntsSummary', topic)
+  const writeups = await getPymntsWriteups(content, topic, numParagraphs, numWriteups);
+  
 }
 
 const getPymntsSummariesForTopics = async (topics, numParagraphs = 2, numWriteupsPerTopic = 3) => {
   const promises = [];
   const summaries = [];
-  topics.forEach((topic, index) => promises.push(getSummary(summaries, index, topic, numParagraphs, numWriteupsPerTopic)));
+
+  const length = topics.length > 2 ? 2 : topics.length;
+
+  for (let i = 0; i < length; ++i) {
+    summaries[i] = {topic: topics[i], content: []}
+    promises.push(getPymntsSummary(summaries[i].content, topics[i], numParagraphs, numWriteupsPerTopic));
+  }
+  
   await Promise.all(promises);
-  console.log('SUMMARIES', summaries);  
+  console.log('SUMMARIES', JSON.stringify(summaries, null, 4));  
+  return summaries;
 }
 
 const extractUrlText = async (mix, index) => {
@@ -327,7 +344,7 @@ const extractSummaries = async (mix) => {
   for (let i = 0; i < mix.content.length; ++i) {
     mix.content[i].summaries = [];
     for (let j = 0; j < mix.content[i].chunks.length; ++j) {
-      promises.push(getSummary(mix, i, j))
+      promises.push(getPymntsSummary(mix, i, j))
     }
   }
 
@@ -340,7 +357,7 @@ const writeAbout = async (articlePart, topic, outputType) => {
   ${articlePart.facts}"""
   `
 
-  console.log('PROMPT', prompt);
+  //console.log('PROMPT', prompt);
 
   articlePart.part = await ai.getChatText(prompt);
   articlePart.partWords = articlePart.part.split(' ').length;
@@ -380,7 +397,7 @@ const mergeArticleParts = async (articleParts, topic) => {
   `
   }
 
-  console.log('PROMPT', prompt);
+  //console.log('PROMPT', prompt);
 
   return await ai.getChatText(prompt);
 }
@@ -403,7 +420,7 @@ const addSubheadings = async (mergedArticle, num, factLinks) => {
   // FactLinks:
   // ${factLinks.join("\n")}"""
   // `
-  console.log('PROMPT', prompt);
+  //console.log('PROMPT', prompt);
   //return await ai.getChatText(prompt);
   return await ai.getDivinciResponse(prompt);
 }
@@ -445,7 +462,7 @@ const getFactsTokens = part => {
     if (factLink !== false) factLinks.push(factLink);
   }
 
-  console.log(factLinks);
+  //console.log(factLinks);
 
   part.factList = factList.join("\n");
   part.factsTokens = nlp.numGpt3Tokens(part.factList);
@@ -565,10 +582,36 @@ const expandSubsection = async (mergedArticle, subheadingIndex, factLinks) => {
 
 const attachPymnts = async (article, socket) => {
 
-  const keywords = await getTopics(article);
+  let result = await getTopics(article);
 
-  console.log('KEYWORDS', keywords);
+  if (result !== false) {
+    const { topics } = result;
+    console.log('TOPICS', topics);
+    result = await getPymntsSummariesForTopics(topics);
 
+    if (result !== false) {
+      let section = '';
+      for (let i = 0; i < result.length; ++i) {
+        const { topic, content } = result[i];
+        console.log(topic, content);
+        
+
+        section = `<h2>PYMNTS on ${topic.replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase())}</h2>`
+        console.log('SECTION H2', section);
+        for (let j = 0; j < content.length; ++j) {
+          let { text, url } = content[j];
+          
+          let paragraphs = text.split("\n");
+          for (let k = 0; k < paragraphs.length; ++k) section += `<p>${paragraphs[k]}</p>`;
+        }
+        console.log('SECTION', section);
+        article += section;
+      }
+      
+    }
+  }
+
+  
   socket.emit('rawArticle', {rawArticle: article})
 }
 
@@ -704,8 +747,8 @@ const processMix = async (mix, socket) => {
 
   if (curFacts) articleParts.push({facts: curFacts, tokens: curTokens});
 
-  console.log("ARTICLE PARTS", articleParts);
-  console.log("ARTICLE TOKENS", articleTokens);
+  // console.log("ARTICLE PARTS", articleParts);
+  // console.log("ARTICLE TOKENS", articleTokens);
 
   const mergedArticle = { content: ''}; 
 
@@ -728,7 +771,7 @@ const processMix = async (mix, socket) => {
     totalTokens += articleParts[i].partTokens;
   }
 
-  console.log("TOTAL TOKENS", totalTokens)
+  //console.log("TOTAL TOKENS", totalTokens)
 
   if (totalTokens > maxPartTokens) {
     
@@ -736,14 +779,14 @@ const processMix = async (mix, socket) => {
     let keepPercent = (maxPartTokens/totalTokens);
    while (totalTokens > maxPartTokens && count <= 3) {
     keepPercent -= .1;
-    console.log('keepPercent', keepPercent);
+    //console.log('keepPercent', keepPercent);
 
     promises = [];
     for (let i = 0; i < articleParts.length; ++i) {
       promises.push(reduceArticlePart(articleParts[i], keepPercent));
     }
 
-    console.log('awaiting reduce promises', promises.length);
+    //console.log('awaiting reduce promises', promises.length);
     await Promise.all(promises);
 
     totalTokens = 0;
@@ -751,7 +794,7 @@ const processMix = async (mix, socket) => {
       totalTokens += articleParts[i].reducedTokens;
     }
 
-    console.log("TOTAL TOKENS", totalTokens);
+    //console.log("TOTAL TOKENS", totalTokens);
     ++count;
    }
 
@@ -801,7 +844,7 @@ const processMix = async (mix, socket) => {
 
   mergedArticle.withSubheadings = await addSubheadings(mergedArticle, 4, factLinks);
 
-  console.log('MERGED ARTICLE', mergedArticle);
+  //console.log('MERGED ARTICLE', mergedArticle);
 
   return attachPymnts(mergedArticle.withSubheadings, socket);
 
@@ -1849,4 +1892,4 @@ const test2 = async () => {
   console.log(result);
 }
 
-test2();
+//test2();

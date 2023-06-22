@@ -16,7 +16,7 @@ exports.google = async (type, query, timePeriod = 'last_month', num = 30) => {
         num
     }
     
-    console.log('params', params);
+    //console.log('params', params);
     if (type !== 'web') params.search_type = type;
 
     let response;
@@ -43,8 +43,12 @@ exports.google = async (type, query, timePeriod = 'last_month', num = 30) => {
             break;
     }
      
+    const display = organic.map(entry => {
+        return {title: entry.title ? entry.title : '', link: entry.link ? entry.link : ''};
+    });
+    
 
-    console.log('organic', organic);
+    console.log(`organic results for ${query}:`, display);
 
     let result = [];
 

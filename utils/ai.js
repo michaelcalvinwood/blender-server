@@ -21,8 +21,6 @@ async function turboChatCompletion (prompt, temperature = 0, service = 'You are 
      * role: assistant, system, user
      */
 
-   
-
     const request = {
         url: 'https://api.openai.com/v1/chat/completions',
         method: 'post',
@@ -50,8 +48,8 @@ async function turboChatCompletion (prompt, temperature = 0, service = 'You are 
 }
 
 
-exports.getTurboResponse = async (prompt, temperature = 0, service = 'You are a helpful, accurate assistant.') => {
-    if (debug) console.log('TURBO', prompt);
+exports.getTurboResponse = async (prompt, temperature = 0, debugMe = false, service = 'You are a helpful, accurate assistant.') => {
+    if (debugMe) console.log('TURBO', prompt);
 
     if (!prompt.endsWith("\n")) prompt += "\n";
 
@@ -77,7 +75,7 @@ exports.getTurboResponse = async (prompt, temperature = 0, service = 'You are a 
             }
             seconds *= 2;
             await sleep(seconds);
-            console.log('Retrying query:', prompt);
+            if (debugMe) console.log('Retrying query:', prompt);
         }
     }
 
@@ -87,15 +85,15 @@ exports.getTurboResponse = async (prompt, temperature = 0, service = 'You are a 
         content: result.data.choices[0].message.content
     }
 
-    if (debug) console.log(response);
+    if (debugMe) console.log(response);
 
     return response;
 }
 
-exports.getDivinciResponse = async (prompt, output = 'text', temperature = .7) => {
+exports.getDivinciResponse = async (prompt, output = 'text', temperature = .7, debugMe = false) => {
     const numPromptTokens = nlp.numGpt3Tokens(prompt);
 
-    if (debug) console.log('DIVINCI PROMPT', numPromptTokens, prompt);
+    if (debugMe) console.log('DIVINCI PROMPT', numPromptTokens, prompt);
 
     const request = {
         url: 'https://api.openai.com/v1/completions',
