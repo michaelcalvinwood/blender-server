@@ -70,6 +70,22 @@ const getTopics = async (text, num = 5) => {
   return keywords;
 }
 
+const getKeywords = async (text, num = 5) => {
+  const prompt = `'''Provide a list of of the  ${num === 1 ? 'most significant keyword' : `${num} most significant keywords`} contained in the following text. Keywords include the names of all people, places, products, services, companies, and organizations mentioned in the text. The returned format must be stringified JSON in the following format: {
+    "keywords": array of keywords goes here,
+    "numKeywords": the number of keywords goes here
+  }
+  
+  Text:
+  ${text}'''
+  `
+  console.log('prompt', prompt);
+  
+  const keywords = await ai.getChatJSON(prompt);
+
+  return keywords;
+}
+
 const addArticle = async (url, articles, index, topic, numParagraphs) => {
   const html = await urlUtils.getHTML(url);
   const article = await urlUtils.extractArticleFromHTML(html);
@@ -1788,7 +1804,9 @@ const test = async () => {
 }
 
 const test2 = async () => {
-  getPymntsSummariesForTopics (['inflation', 'digital payments']);
+  let result = await getKeywords(`Inflation has been on the rise across the US for the past two years, with San Diego having one of the highest inflation rates in the nation. According to the US Bureau of Labor Statistics, San Diego County prices increased 5.2 percent in the 12 months ending in May (Source 1).`);
+
+  console.log(result);
 }
 
-//test();
+test2();
