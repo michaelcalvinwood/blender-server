@@ -46,9 +46,12 @@ exports.getHTML = async url => {
       else console.error('getHTML error:', err);
       return false;
     }
+
+    console.log('RESPONSE DATA', response.data);
   
     return response.data;
 }
+
 
 exports.extractArticleFromHTML = async (html, url = '') => {
     

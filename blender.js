@@ -1699,8 +1699,14 @@ const processMixLinks = async (mix, socket) => {
 // }
 
 const handleSocketEvents = async socket => {
+  socket.on('mix', mix => {
+    const { html } = mix;
+    if (html.links) processMixLinks(mix, socket);
+    else processMix(mix, socket);
+  })
+
   //socket.on('mix', (mix) => processMixLinks(mix, socket))
-  socket.on('mix', (mix) => processMix(mix, socket))
+  //socket.on('mix', (mix) => processMix(mix, socket))
 }
 
 const httpsServer = https.createServer({
@@ -1785,4 +1791,4 @@ const test2 = async () => {
   getPymntsSummariesForTopics (['inflation', 'digital payments']);
 }
 
-test();
+//test();
