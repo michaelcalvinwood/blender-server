@@ -86,6 +86,46 @@ const getKeywords = async (text, num = 5) => {
   return keywords;
 }
 
+const createLink = async (sentence, url) => {
+  sentence = sentence.trim();
+  const result = await getKeywords(sentence, 10);
+  
+  let keyword;
+
+  if (result !== false) {
+    const { keywords } = result;
+    let curSize = 0;
+    keywords.forEach(entry => {
+      if (entry.length > curSize) {
+        curSize = entry.length;
+        keyword = entry;
+      }
+    })
+  } else {
+    let loc = sentence.indexOf(' ');
+    keyword = sentence.substring(0, loc);  
+  }
+
+  let loc = sentence.toLowerCase().indexOf(keyword.toLowerCase());
+
+  let left, middle, right;
+
+  if (loc === 0) {
+    left = `<a href="${url}" target="_blank">${keyword}</a>`;
+    middle = '';
+    right = sentence.substring(keyword.length);
+  } else {
+    left = sentence.substring(0, loc);
+    middle = `<a href="${url}" target="_blank">${keyword}</a>`;
+    right = sentence.substring(loc + keyword.length);
+  }
+
+  return left + middle + right;
+
+  console.log('keyword', keyword);
+
+}
+
 const addArticle = async (url, articles, index, topic, numParagraphs) => {
   const html = await urlUtils.getHTML(url);
   const article = await urlUtils.extractArticleFromHTML(html);
@@ -1804,7 +1844,7 @@ const test = async () => {
 }
 
 const test2 = async () => {
-  let result = await getKeywords(`Inflation has been on the rise across the US for the past two years, with San Diego having one of the highest inflation rates in the nation. According to the US Bureau of Labor Statistics, San Diego County prices increased 5.2 percent in the 12 months ending in May (Source 1).`);
+  let result = await createLink(`According to the US Bureau of Labor Statistics, San Diego County prices increased 5.2 percent in the 12 months ending in May (Source 1).`, 'https://cnn.com');
 
   console.log(result);
 }
