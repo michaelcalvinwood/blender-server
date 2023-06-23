@@ -183,7 +183,8 @@ const getPymntsSummariesForTopics = async (topics, numParagraphs = 2, numWriteup
   const promises = [];
   const summaries = [];
 
-  const length = topics.length > 2 ? 2 : topics.length;
+  //const length = topics.length > 2 ? 2 : topics.length;
+  const length = topics.length;
 
   for (let i = 0; i < length; ++i) {
     summaries[i] = {topic: topics[i], content: []}
@@ -580,6 +581,20 @@ const expandSubsection = async (mergedArticle, subheadingIndex, factLinks) => {
   mergedArticle.expandedSubheadings[subheadingIndex] = await ai.getChatText(prompt);
 }
 
+const textIsNotRelevant = text => {
+  let testText = text.toLowerCase();
+  let test = testText.indexOf('none');
+  let filter = false;
+
+
+  if (test > -1 && test < 10) filter = true;
+  else if (test > text.length - 10) filter = true;
+  else if (testText.indexOf('no information') > -1) filter = true;
+
+  if (filter) console.log('FILTERED', text);
+  return filter;
+}
+
 const attachPymnts = async (article, socket) => {
 
   let result = await getTopics(article);
@@ -594,18 +609,20 @@ const attachPymnts = async (article, socket) => {
       for (let i = 0; i < result.length; ++i) {
         const { topic, content } = result[i];
         console.log(topic, content);
-        
-
+        let num = 0;
         section = `<h2>PYMNTS on ${topic.replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase())}</h2>`
         console.log('SECTION H2', section);
         for (let j = 0; j < content.length; ++j) {
           let { text, url } = content[j];
           
+          if (textIsNotRelevant(text)) continue;
+          ++num;
+
           let paragraphs = text.split("\n");
           for (let k = 0; k < paragraphs.length; ++k) section += `<p>${paragraphs[k]}</p>`;
         }
-        console.log('SECTION', section);
-        article += section;
+        console.log('SECTION', num, section);
+        if (num) article += section;
       }
       
     }
