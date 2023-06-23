@@ -120,9 +120,10 @@ const createLink = async (sentence, url) => {
     right = sentence.substring(loc + keyword.length);
   }
 
+
   return left + middle + right;
 
-  console.log('keyword', keyword);
+  
 
 }
 
@@ -590,9 +591,41 @@ const textIsNotRelevant = text => {
   if (test > -1 && test < 10) filter = true;
   else if (test > text.length - 10) filter = true;
   else if (testText.indexOf('no information') > -1) filter = true;
+  else if (testText.indexOf('does not provide information') > -1) filter = true;
+  else if (testText.indexOf('none of the information') > -1) filter = true;
 
   if (filter) console.log('FILTERED', text);
   return filter;
+}
+
+const filterPymntsText = text => {
+  
+  text = text.replaceAll('The article', 'PYMNTS').replaceAll('in the article', 'according to PYMNTS').replaceAll('the article', 'PYMNTS');
+
+  return text;
+  
+}
+
+const linkifyParagraph = async (paragraph, url) => {
+  let sentences = nlp.getSentences(paragraph.trim());
+  console.log('linkifyParagraph sentences', sentences);
+
+  let num = -1;
+  for (let i = 0; i < sentences.length; ++i) {
+    if (sentences[i].length > 15) {
+      num = i;
+      break;
+    }
+  }
+  console.log('linkifyParagraph num', num);
+
+  if (num === -1) {
+    return paragraph;
+  }
+
+  sentences[num] = await createLink(sentences[num], url);
+
+  return sentences.join(' ');
 }
 
 const attachPymnts = async (article, socket) => {
@@ -618,8 +651,14 @@ const attachPymnts = async (article, socket) => {
           if (textIsNotRelevant(text)) continue;
           ++num;
 
+          text = filterPymntsText(text);
           let paragraphs = text.split("\n");
-          for (let k = 0; k < paragraphs.length; ++k) section += `<p>${paragraphs[k]}</p>`;
+          for (let k = 0; k < paragraphs.length; ++k) {
+            if (k === 0) {
+              paragraphs[k] = await linkifyParagraph(paragraphs[k], url);
+            }
+            section += `<p>${paragraphs[k]}</p>`;
+          }
         }
         console.log('SECTION', num, section);
         if (num) article += section;
