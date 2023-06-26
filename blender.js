@@ -670,7 +670,25 @@ const attachPymnts = async (article) => {
   return article;
 }
 
+const getLinksUsed = mix => {
+  const linksUsed = [];
+
+  for (let i = 0; i < mix.content.length; ++i) {
+    const link = mix.content[i].url;
+    const title = mix.content[i].title;
+    linksUsed.push({title, link});
+  }
+
+  return linksUsed;
+}
+
 const processMix = async (mix, socket) => {
+  const linksUsed = getLinksUsed(mix);
+
+  console.log(linksUsed);
+
+  return;
+
   let outputType;
   switch (mix.output.type) {
     case 'news':
@@ -901,9 +919,11 @@ const processMix = async (mix, socket) => {
 
   //console.log('MERGED ARTICLE', mergedArticle);
 
-  mergedArticle.withSubheadings = attachPymnts(mergedArticle.withSubheadings);
+  let curArticle = await attachPymnts(mergedArticle.withSubheadings);
 
-  socket.emit('rawArticle', {rawArticle: mergedArticle.withSubheadings});
+  console.log("CURARTICLE", curArticle);
+
+  socket.emit('rawArticle', {rawArticle: curArticle});
 
   return;
 
@@ -1542,6 +1562,8 @@ const processMixLinksSecond = async (mix, socket) => {
 }
 
 const processMixLinks = async (mix, socket) => {
+  const linksUsed = getLinksUsed(mix);
+
   let outputType;
   switch (mix.output.type) {
     case 'news':
@@ -1706,8 +1728,9 @@ const processMixLinks = async (mix, socket) => {
 
   //const linkifiedArticle = await linkifyArticle(refinedArticle, sourceMap);
 
-  refinedArticle = attachPymnts(refinedArticle);
+  refinedArticle = await attachPymnts(refinedArticle);
   
+  socket.emit('rawArticle', {rawArticle: refinedArticle});
   
 }
 
