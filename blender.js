@@ -638,12 +638,12 @@ const attachPymnts = async (article) => {
     result = await getPymntsSummariesForTopics(topics);
 
     if (result !== false) {
-      let section = '';
+      let section = '<h2>PYMNTS Backstory</h2>';
       for (let i = 0; i < result.length; ++i) {
         const { topic, content } = result[i];
         console.log(topic, content);
         let num = 0;
-        section = `<h2>PYMNTS on ${topic.replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase())}</h2>`
+        section = `<h3>PYMNTS on ${topic.replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase())}</h3>`
         console.log('SECTION H2', section);
         for (let j = 0; j < content.length; ++j) {
           let { text, url } = content[j];
@@ -685,6 +685,18 @@ const getLinksUsed = mix => {
   }
 
   return linksUsed;
+}
+
+const attachLinksUsed = (article, linksUsed) => {
+  if (!linksUsed.length) return article;
+
+  let section = `<h2>Third-Party Sources</h2><p>In addition to PYMNTS own sources and reporting, the following third-party sources were consulted in the creation of this article:<p><ul>`;
+  for (let i = 0; i < linksUsed.length; ++i) section += `<li><a href="${linksUsed[i].link}" target="_blank">${linksUsed[i].title}</li>`
+  section += '</ul>';
+
+  article += section;
+
+  return article;
 }
 
 const processMix = async (mix, socket) => {
@@ -922,7 +934,7 @@ const processMix = async (mix, socket) => {
 
   let curArticle = await attachPymnts(mergedArticle.withSubheadings);
 
-  console.log("CURARTICLE", curArticle);
+  curArticle = attachLinksUsed(curArticle, linksUsed);
 
   socket.emit('rawArticle', {rawArticle: curArticle});
 
@@ -1730,6 +1742,8 @@ const processMixLinks = async (mix, socket) => {
   //const linkifiedArticle = await linkifyArticle(refinedArticle, sourceMap);
 
   refinedArticle = await attachPymnts(refinedArticle);
+
+  refinedArticle = attachLinksUsed(refinedArticle, linksUsed);
   
   socket.emit('rawArticle', {rawArticle: refinedArticle});
   
