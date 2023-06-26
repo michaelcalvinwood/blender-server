@@ -75,7 +75,7 @@ exports.getTurboResponse = async (prompt, temperature = 0, debugMe = false, serv
             }
             seconds *= 2;
             await sleep(seconds);
-            if (debugMe) console.log('Retrying query:', prompt);
+            console.log('Retrying query:', prompt);
         }
     }
 

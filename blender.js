@@ -359,7 +359,6 @@ const writeAbout = async (articlePart, topic, outputType) => {
   ${articlePart.facts}"""
   `
 
-  //console.log('PROMPT', prompt);
 
   articlePart.part = await ai.getChatText(prompt);
   articlePart.partWords = articlePart.part.split(' ').length;
@@ -374,7 +373,7 @@ const reduceArticlePart = async (articlePart, keepPercent) => {
   ${articlePart.part}"""
   `
 
-  //console.log('PROMPT', prompt);
+
 
   articlePart.reduced = await ai.getChatText(prompt);
   articlePart.reducedWords = articlePart.reduced.split(' ').length;
@@ -399,31 +398,26 @@ const mergeArticleParts = async (articleParts, topic) => {
   `
   }
 
-  //console.log('PROMPT', prompt);
 
   return await ai.getChatText(prompt);
 }
 
-const addSubheadings = async (mergedArticle, num, factLinks) => {
+const addSubheadings = async (mergedArticle, html) => {
 
-  const prompt = `"""Below is some Content. Using ${mergedArticle.numWords + 100} words, rewrite the content using HTML. Use headings, subheadings, tables, bullet points, paragraphs, and bold to organize the information.
+  let use = [];
+  if (html.headings) use.push('headings, subheadings');
+  if (html.tables) use.push('tables');
+  if (html.bullets) use.push('bullets');
+  if (html.bold) use.push('bold');
+
+  let useStr = use.length > 0 ? use.join(', ') + " and paragraphs " : " paragraphs ";
+
+  const prompt = `"""Below is some Content. Using ${mergedArticle.numWords + 100} words, rewrite the content using HTML. Use ${useStr} to organize the information.
   
   Content:
   ${mergedArticle.content}"""
   `
-  
-  // const prompt = `"""Below is some Content and FactLinks. Using ${mergedArticle.numWords + 100} words, rewrite the content using HTML by incorporating ${Math.ceil(factLinks.length / 3)} FactLinks verbatim, as-is.
-  
-  // [Format Guide: Use headings, subheadings, tables, bullet points, paragraphs, links, and bold to organize the information. There must be a minimum of ${Math.ceil(factLinks.length / 3)} FactLinks included.] 
-  
-  // Content:
-  // ${mergedArticle.content}
-  
-  // FactLinks:
-  // ${factLinks.join("\n")}"""
-  // `
-  //console.log('PROMPT', prompt);
-  //return await ai.getChatText(prompt);
+
   return await ai.getDivinciResponse(prompt);
 }
 
@@ -699,7 +693,30 @@ const attachLinksUsed = (article, linksUsed) => {
   return article;
 }
 
+const sendTagsAndTitles = async (article, socket) => {
+  const prompt = `"""Give 10 interesting, eye-catching titles for the provided News Article below.
+  Also generate a list of tags that include the important words and phrases in the response. 
+  The list of tags must also include the names of all people, products, services, places, companies, and organizations mentioned in the response.
+  Also generate a conclusion for the news article.
+  The return format must be stringified JSON in the following format: {
+      "titles": array of titles goes here
+      "tags": array of tags go here
+      "conclusion": conclusion goes here
+  }
+  News Article:
+  ${article}\n"""\n`;
+
+  const tat = await ai.getChatJSON(prompt);
+
+  console.log('TAGSANDTITLES', tat);
+
+  socket.emit('tagsAndTitles', tat);
+}
+
+
+
 const processMix = async (mix, socket) => {
+
   const linksUsed = getLinksUsed(mix);
 
   let outputType;
@@ -928,15 +945,18 @@ const processMix = async (mix, socket) => {
   
   console.log('awaiting adding subheadings: numWords numTokens', mergedArticle.numWords, mergedArticle.numTokens);
 
-  mergedArticle.withSubheadings = await addSubheadings(mergedArticle, 4, factLinks);
+  mergedArticle.withSubheadings = await addSubheadings(mergedArticle, mix.html);
 
   //console.log('MERGED ARTICLE', mergedArticle);
+  sendTagsAndTitles(mergedArticle.withSubheadings, socket);
 
   let curArticle = await attachPymnts(mergedArticle.withSubheadings);
 
   curArticle = attachLinksUsed(curArticle, linksUsed);
 
   socket.emit('rawArticle', {rawArticle: curArticle});
+
+
 
   return;
 
@@ -1729,23 +1749,24 @@ const processMixLinks = async (mix, socket) => {
 
 
   prompt = `"""Below is an article with the source of each fact annotated. Using 1300 words, create a very engaging, dynamic article while preserving the source annotations for each fact.
-  [Format Guide: The return format should be in HTML using subheadings for oranization.]
+  ${`${mix.html.headings ? `[Format Guide: The return format should be in HTML using subheadings for oranization.]` : ''}`}
   
   Article:
   ${article}'''
   `
 
-
   let refinedArticle = await ai.getDivinciResponse(prompt);
   console.log('REFINED ARTICLE', refinedArticle);
 
   //const linkifiedArticle = await linkifyArticle(refinedArticle, sourceMap);
+  sendTagsAndTitles(refinedArticle, socket);
 
   refinedArticle = await attachPymnts(refinedArticle);
 
   refinedArticle = attachLinksUsed(refinedArticle, linksUsed);
   
   socket.emit('rawArticle', {rawArticle: refinedArticle});
+
   
 }
 
