@@ -628,7 +628,7 @@ const linkifyParagraph = async (paragraph, url) => {
   return sentences.join(' ');
 }
 
-const attachPymnts = async (article, socket) => {
+const attachPymnts = async (article) => {
 
   let result = await getTopics(article);
 
@@ -667,8 +667,7 @@ const attachPymnts = async (article, socket) => {
     }
   }
 
-  
-  socket.emit('rawArticle', {rawArticle: article})
+  return article;
 }
 
 const processMix = async (mix, socket) => {
@@ -902,7 +901,7 @@ const processMix = async (mix, socket) => {
 
   //console.log('MERGED ARTICLE', mergedArticle);
 
-  return attachPymnts(mergedArticle.withSubheadings, socket);
+  mergedArticle.withSubheadings = attachPymnts(mergedArticle.withSubheadings);
 
   socket.emit('rawArticle', {rawArticle: mergedArticle.withSubheadings});
 
@@ -1702,12 +1701,12 @@ const processMixLinks = async (mix, socket) => {
   `
 
 
-  const refinedArticle = await ai.getDivinciResponse(prompt);
+  let refinedArticle = await ai.getDivinciResponse(prompt);
   console.log('REFINED ARTICLE', refinedArticle);
 
   //const linkifiedArticle = await linkifyArticle(refinedArticle, sourceMap);
 
-  attachPymnts(refinedArticle, socket);
+  refinedArticle = attachPymnts(refinedArticle);
   
   
 }
