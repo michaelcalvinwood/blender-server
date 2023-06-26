@@ -676,7 +676,12 @@ const getLinksUsed = mix => {
   for (let i = 0; i < mix.content.length; ++i) {
     const link = mix.content[i].url;
     const title = mix.content[i].title;
-    linksUsed.push({title, link});
+    try {
+      let test = new URL(link);
+      linksUsed.push({title, link});
+    } catch (err) {
+      console.error('getLinksUsed ERROR', err)
+    }
   }
 
   return linksUsed;
@@ -684,10 +689,6 @@ const getLinksUsed = mix => {
 
 const processMix = async (mix, socket) => {
   const linksUsed = getLinksUsed(mix);
-
-  console.log(linksUsed);
-
-  return;
 
   let outputType;
   switch (mix.output.type) {
