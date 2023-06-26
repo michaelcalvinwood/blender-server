@@ -1772,7 +1772,10 @@ const processMixLinks = async (mix, socket) => {
 
 const handleUpload = async (upload, socket) => {
   console.log(upload);
+  const {article, title, titles, tags, login } = upload;
+  const { username, password } = login;
 
+  await wp.createPost (`delta.pymnts.com`, username, password, title, article, tags, titles, 'draft', socket);
 }
 
 // const processMixLinksAndQuotes = async (mix, socket) => {

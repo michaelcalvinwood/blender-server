@@ -90,7 +90,7 @@ exports.getTagId = async (hostname, username, password, tagName) => {
     return Number(response.data.id);
 }
 
-exports.createPost = async (hostname, username, password, title, content, tagNames = [], suggestedTitles = [], status = 'draft') => {
+exports.createPost = async (hostname, username, password, title, content, tagNames = [], suggestedTitles = [], status = 'draft', socket) => {
     let token, request, response;
 
     let tagIds = [];
@@ -99,12 +99,13 @@ exports.createPost = async (hostname, username, password, title, content, tagNam
 
     if (tagNames.length) {
         for (let i = 0; i < tagNames.length; ++i) {
+            socket.emit('msg', {status: 'success', msg: `Setting tag: ${tagNames[i]}`});
             const tagId = await exports.getTagId (hostname, username, password, tagNames[i]);
             tagIds.push(tagId);
         }
-        
     }
 
+    socket.emit('msg', {status: 'success', msg: `Getting WordPress authorization`});
     token = await exports.getJWT(hostname, username, password);
 
     request = {
@@ -131,8 +132,10 @@ exports.createPost = async (hostname, username, password, title, content, tagNam
    // console.log(request);
 
     try {
+        socket.emit('msg', {status: 'success', msg: `Creating WordPress Post`});
         response = await axios(request);
-        console.log('WordPress post ID: ', response.data.id);
+        const postId = response.data.id;
+        socket.emit('msg', {status: 'success', msg: `Created WordPress Post ${postId}`});
     } catch (err) {
         console.error(err);
         return false;
