@@ -63,7 +63,7 @@ const getTopics = async (text, num = 5) => {
   Text:
   ${text}'''
   `
-  console.log('prompt', prompt);
+  //console.log('prompt', prompt);
   
   const keywords = await ai.getChatJSON(prompt);
 
@@ -747,6 +747,7 @@ const processMix = async (mix, socket) => {
 
   socket.emit('text', mix.content);
   socket.emit('msg', {status: 'success', msg: ''});
+  socket.emit('progress', {current: 1, max: 10});
 
   /*
    * split text into chunks
@@ -759,6 +760,7 @@ const processMix = async (mix, socket) => {
   setTimeout(()=>{
     socket.emit('msg', {status: 'success', msg: ''})
     socket.emit('chunks', mix.content);
+    socket.emit('progress', {current: 2, max: 10});
   }, 5000);
 
   /*
@@ -775,6 +777,7 @@ const processMix = async (mix, socket) => {
 
   console.log('awaiting info promises', promises.length);
   await Promise.all(promises);
+  socket.emit('progress', {current: 3, max: 10});
 
   socket.emit('info', mix.content);
 
@@ -807,6 +810,7 @@ const processMix = async (mix, socket) => {
    */
 
   for (let i = 0; i < articleChunks.length; ++i) getFactsTokens(articleChunks[i]);
+  socket.emit('progress', {current: 4, max: 10});
 
   /*
    * Sort the article chunks by total tokens needed ascending
@@ -863,7 +867,7 @@ const processMix = async (mix, socket) => {
   console.log('await articleParts promises', promises.length);
 
   await Promise.all(promises);
-
+  socket.emit('progress', {current: 5, max: 10});
   //console.log('ARTICLE PARTS', articleParts);
 
   let totalWords = 0;
@@ -892,6 +896,7 @@ const processMix = async (mix, socket) => {
     //console.log('awaiting reduce promises', promises.length);
     await Promise.all(promises);
 
+    socket.emit('progress', {current: 6, max: 10});
     totalTokens = 0;
     for (let i = 0; i < articleParts.length; ++i) {
       totalTokens += articleParts[i].reducedTokens;
@@ -909,6 +914,7 @@ const processMix = async (mix, socket) => {
    console.log('awaiting merge')
 
    mergedArticle.content = await mergeArticleParts(articleParts, mix.topic);
+   socket.emit('progress', {current: 7, max: 10});
 
   } else if (articleParts.length > 1) {
     for (let i = 0; i < articleParts.length; ++i) {
@@ -917,11 +923,13 @@ const processMix = async (mix, socket) => {
       articleParts[i].reducedTokens = nlp.numGpt3Tokens(articleParts[i].reduced);
     } 
     mergedArticle.content = await mergeArticleParts(articleParts, mix.topic);
+    socket.emit('progress', {current: 7, max: 10});
   } else if (articleParts.length > 0) {
     articleParts[0].reduced = articleParts[0].part;
     articleParts[0].reducedWords = articleParts[0].reduced.split(' ').length;
     articleParts[0].reducedTokens = nlp.numGpt3Tokens(articleParts[0].reduced);
     mergedArticle.content = articleParts[0].part;
+    socket.emit('progress', {current: 7, max: 10});
   } else {
     return socket.emit('msg', {status: 'error', msg: 'unabled to produced article'});
   }
@@ -946,16 +954,19 @@ const processMix = async (mix, socket) => {
   console.log('awaiting adding subheadings: numWords numTokens', mergedArticle.numWords, mergedArticle.numTokens);
 
   mergedArticle.withSubheadings = await addSubheadings(mergedArticle, mix.html);
+  socket.emit('progress', {current: 8, max: 10});
 
   //console.log('MERGED ARTICLE', mergedArticle);
   sendTagsAndTitles(mergedArticle.withSubheadings, socket);
 
   let curArticle = await attachPymnts(mergedArticle.withSubheadings);
+  socket.emit('progress', {current: 9, max: 10});
 
   curArticle = attachLinksUsed(curArticle, linksUsed);
 
   socket.emit('rawArticle', {rawArticle: curArticle});
 
+  socket.emit('progress', {current: 10, max: 10});
 
 
   return;
@@ -1771,7 +1782,6 @@ const processMixLinks = async (mix, socket) => {
 }
 
 const handleUpload = async (upload, socket) => {
-  console.log(upload);
   const {article, title, titles, tags, login } = upload;
   const { username, password } = login;
 
