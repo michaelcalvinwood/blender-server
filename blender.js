@@ -1770,6 +1770,11 @@ const processMixLinks = async (mix, socket) => {
   
 }
 
+const handleUpload = async (upload, socket) => {
+  console.log(upload);
+
+}
+
 // const processMixLinksAndQuotes = async (mix, socket) => {
 //   let outputType;
 //   switch (mix.output.type) {
@@ -1917,6 +1922,8 @@ const handleSocketEvents = async socket => {
     if (html.links) processMixLinks(mix, socket);
     else processMix(mix, socket);
   })
+
+  socket.on('upload', upload => handleUpload(upload, socket));
 
   //socket.on('mix', (mix) => processMixLinks(mix, socket))
   //socket.on('mix', (mix) => processMix(mix, socket))
