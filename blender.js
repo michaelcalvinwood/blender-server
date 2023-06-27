@@ -402,8 +402,31 @@ const mergeArticleParts = async (articleParts, topic) => {
   return await ai.getChatText(prompt);
 }
 
-const addSubheadings = async (mergedArticle, html) => {
+const getQuote = info => {
+  const { speaker, affiliation, quote } = info;
 
+  if (speaker && affiliation) return `${speaker}, ${affiliation}, states: ${quote}`;
+  if (speaker) return `${speaker} states: ${quote}`;
+  if (affiliation) return `${affiliation} states: ${quote}`;
+  return '';
+}
+
+const addSubheadings = async (mergedArticle, html, info) => {
+  
+  const quotes = info.map(entry => entry.quotes);
+  const quoteList = [];
+  for (let i = 0; i < quotes.length; ++i) {
+    for (let j = 0; j < quotes[i].length; ++j) {
+      let quote = getQuote(quotes[i][j]);
+      console.log('addSubheadings quote: ', quote);
+      if (quote) quoteList.push(quote);
+    }
+  }
+
+
+
+  console.log('addSubheadings quotes', quotes);
+  
   let use = [];
   if (html.headings) use.push('headings, subheadings');
   if (html.tables) use.push('tables');
@@ -412,11 +435,21 @@ const addSubheadings = async (mergedArticle, html) => {
 
   let useStr = use.length > 0 ? use.join(', ') + " and paragraphs " : " paragraphs ";
 
-  const prompt = `"""Below is some Content. Using ${mergedArticle.numWords + 100} words, rewrite the content using HTML. Use ${useStr} to organize the information.
+  let prompt = `"""Below is some Content. Using ${mergedArticle.numWords + 100} words, rewrite the content using HTML. Use ${useStr} to organize the information.
   
   Content:
   ${mergedArticle.content}"""
   `
+
+//   prompt = `"""Below is some Content and Quotes. Using ${mergedArticle.numWords + 200} words, expand the content by incorporating ${Math.ceil(quoteList/3)} relevant quotes.
+//   [Format Guide: The return format should be HTML using ${useStr} to organize the information.]
+//   Content:
+//   ${mergedArticle.content}
+//   Quotes:
+//   ${quoteList.join("\n")}"""
+// `
+
+  console.log('PROMPT', prompt);
 
   return await ai.getDivinciResponse(prompt);
 }
@@ -623,7 +656,9 @@ const linkifyParagraph = async (paragraph, url) => {
 }
 
 const attachPymnts = async (article) => {
+  const origArticle = article;
 
+ try {
   let result = await getTopics(article);
 
   if (result !== false) {
@@ -632,8 +667,10 @@ const attachPymnts = async (article) => {
     result = await getPymntsSummariesForTopics(topics);
 
     if (result !== false) {
-      let section = '<h2>PYMNTS Backstory</h2>';
+      let section = '';
       for (let i = 0; i < result.length; ++i) {
+        if (typeof result[i].content === 'undefined') continue;
+
         const { topic, content } = result[i];
         console.log(topic, content);
         let num = 0;
@@ -662,6 +699,10 @@ const attachPymnts = async (article) => {
   }
 
   return article;
+ } catch (err) {
+  console.error ('attachPymnts', err);
+  return origArticle;
+ }
 }
 
 const getLinksUsed = mix => {
@@ -953,7 +994,13 @@ const processMix = async (mix, socket) => {
   
   console.log('awaiting adding subheadings: numWords numTokens', mergedArticle.numWords, mergedArticle.numTokens);
 
-  mergedArticle.withSubheadings = await addSubheadings(mergedArticle, mix.html);
+  if (mix.html.headings) mergedArticle.withSubheadings = await addSubheadings(mergedArticle, mix.html, articleChunks);
+  else {
+    let paragraphs = mergedArticle.content.split("\n");
+    for (let i = 0; i < paragraphs.length; ++i) paragraphs[i] = `<p>${paragraphs[i]}</p>\n`;
+    mergedArticle.withSubheadings = paragraphs.join('');
+  }
+  
   socket.emit('progress', {current: 8, max: 10});
 
   //console.log('MERGED ARTICLE', mergedArticle);
@@ -2027,3 +2074,4 @@ const test2 = async () => {
 }
 
 //test2();
+
