@@ -12,6 +12,7 @@ const socketio = require('socket.io');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const cheerio = require('cheerio');
+const mysql = require('mysql2');
 
 const urlUtils = require('./utils/url');
 const wp = require('./utils/wordpress');
@@ -25,6 +26,35 @@ const app = express();
 app.use(express.static('public'));
 app.use(express.json({limit: '200mb'})); 
 app.use(cors());
+
+const pool = mysql.createPool({
+  host: 'localhost',
+  user: 'blender',
+  database: 'blender',
+  waitForConnections: true,
+  connectionLimit: 2,
+  password: process.env.MYSQL_PASSWORD
+});
+
+const query = async query => {
+  return new Promise((resolve, reject) => {
+    pool.query(query, (err, rows) => {
+      if (err) {
+        console.error(err);
+        return resolve(false);
+      }
+      return resolve(rows);
+    })
+  })
+}
+
+const teso = async () => {
+  let result = await query('SHOW DATABASES');
+
+  console.log('result', result);
+}
+
+teso();
 
 /*
  * REST API Functions
@@ -354,13 +384,23 @@ const extractSummaries = async (mix) => {
 }
 
 const writeAbout = async (articlePart, topic, outputType) => {
-  prompt = `"""Below are a set of Facts. In ${Math.ceil(articlePart.tokens/2) < 800 ? Math.ceil(articlePart.tokens/2) : 800} words, write a highly engaging, dynamic ${outputType} using as many facts as possible.
+  let prompt = `"""Below are a set of Facts. In ${Math.ceil(articlePart.tokens/2) < 800 ? Math.ceil(articlePart.tokens/2) : 800} words, write a highly engaging, dynamic ${outputType} using as many facts as possible.
   
   ${articlePart.facts}"""
   `
 
+  prompt = `"""Below are a set of Facts and Quotes. In ${Math.ceil(articlePart.tokens/2) < 800 ? Math.ceil(articlePart.tokens/2) : 800} words, write a highly engaging, dynamic ${outputType} using as many facts and quotes as possible.
+  
+  ${articlePart.facts}
+  
+  ${articlePart.quotes}"""
+  `
 
-  articlePart.part = await ai.getChatText(prompt);
+
+
+
+//  articlePart.part = await ai.getChatText(prompt);
+  articlePart.part = await ai.getDivinciResponse(prompt, 'text', 1, true);
   articlePart.partWords = articlePart.part.split(' ').length;
   articlePart.partTokens = nlp.numGpt3Tokens(articlePart.part);
 
@@ -396,9 +436,13 @@ const mergeArticleParts = async (articleParts, topic) => {
   
   ${articles}"""
   `
+prompt = `"""Below are ${articleParts.length} Articles which may contain quotes. Use the information and quotes in these articles to write a highly dynamic and engaging 1100-word article about the following topic: ${topic}. Be sure that the returned content utilizes every quote verbatim.
+
+${articles}"""
+`
   }
 
-
+  return await ai.getDivinciResponse(prompt, 'text', 1, true);
   return await ai.getChatText(prompt);
 }
 
@@ -489,6 +533,7 @@ const getFactLink = (fact, keywords, url) => {
 
 const getFactsTokens = part => {
   const factList = [];
+  const quoteList = [];
   const factLinks = [];
 
   for (let i = 0; i < part.keyFacts.length; ++i) {
@@ -499,16 +544,18 @@ const getFactsTokens = part => {
 
   for (let i = 0; i < part.quotes.length; ++i) {
     const quote = getQuote(part.quotes[i]);
-    console.log('QUOTE', quote);
-    factList.push(quote);
+    //console.log('QUOTE', quote);
+    quoteList.push(quote);
     //const factLink = getFactLink(quote, part.keyFacts[i].keywords, `http://c.co?n=${part.num}`);
     //if (factLink !== false) factLinks.push(factLink);
   }
 
-  console.log('FACTLIST', factList);
+  //console.log('FACTLIST', factList);
 
   part.factList = factList.join("\n");
+  part.quoteList = quoteList.join("\n");
   part.factsTokens = nlp.numGpt3Tokens(part.factList);
+  part.quotesTokens = nlp.numGpt3Tokens(part.quoteList);
   part.factLinks = factLinks;
 
 }
@@ -792,47 +839,69 @@ const findQuoteInChunks = (quote, chunks) => {
   return false;
 }
 
-const linkifiedSentence = (sentence, quote, url) => {
-  return 'LINKIFIED SENTENCE';
+const linkifiedSentence = (sentence, quote, url, loc1, loc2) => {
+  const left = loc1 > 0 ? sentence.substring(0, loc1) : '';
+  const right = loc2 < sentence.length ? sentence.substring(loc2) : '';
+
+  const stripped = quote.substring(1, quote.length - 1);
+  const words = stripped.split(' ');
+  let blue = '';
+  let black = '';
+  for (let i = 0; i < words.length; ++i) {
+    if (i < 3) blue += words[i] + ' ';
+    else black += words[i] + ' ';
+  }
+  black = black.trimEnd();
+  if (!black) blue = trimEnd();
+  
+  return `${left}"<a href="${url}" target="_blank">${blue}</a>${black}"${right}`;
 }
 
 const linkifyQuote = (sentence, content) => {
   console.log('LINKIFY', sentence);
-  let loc = sentence.indexOf('"');
-  const quote = extractQuote(sentence, loc);
-  console.log('quote', quote);   
+  let loc1 = sentence.indexOf('"');
+  const quote = extractQuote(sentence, loc1);
+  console.log('QUOTE', quote);   
   if (quote === false) return sentence;
 
   for (let i = 0; i < content.length; ++i) {
     let { url, text } = content[i];
     text = text.toLowerCase();
-    loc = text.indexOf(quote.toLowerCase());
-    if (loc !== -1) {
+    loc2 = text.indexOf(quote.toLowerCase());
+    if (loc2 !== -1) {
       console.log('URL', url);
-      return linkifiedSentence(sentence, quote, url)
+      return linkifiedSentence(sentence, quote, url, loc1, loc2)
     }
   }
-  /*
-   STRIP QUOTES HERE
-  */
-
-  return sentence;
+  
+  return sentence.replaceAll('"', '');
 }
 
-const linkifyQuotes = (article, content) => {
-  console.log('ARTICLE', article);
-  console.log('CONTENT', JSON.stringify(content, null, 4));
+const linkifyQuotesOrig = (article, content) => {
+  //console.log('ARTICLE', article);
+  //console.log('CONTENT', JSON.stringify(content, null, 4));
   const sentences = nlp.getSentences(article);
   for (let i = 0; i < sentences.length; ++i) {
     const sentence = sentences[i];
     const test = sentence.indexOf('"');
-    if (test === -1) continue;
-    sentences[i] = linkifyQuote(sentence, content);
+    if (test === -1) {
+      //console.log(`NO : ${sentence}`)
+      continue;
+    } else {
+      //console.log(`YES: ${sentence}`);
+      sentences[i] = linkifyQuote(sentence, content);
+    }
+    continue
+    
   }
 
   console.log('SENTENCES', sentences);
   
   return sentences.join(' ');
+}
+
+const linkifyQuotes = (article, content) => {
+
 }
 
 
@@ -933,7 +1002,6 @@ const processMix = async (mix, socket) => {
   for (let i = 0; i < articleChunks.length; ++i) getFactsTokens(articleChunks[i]);
   socket.emit('progress', {current: 4, max: 10});
 
-  return;
 
   /*
    * Sort the article chunks by total tokens needed ascending
@@ -958,26 +1026,28 @@ const processMix = async (mix, socket) => {
   const maxPartTokens = 1750;
   const articleParts = [];
   let curFacts = "Facts:\n";
+  let curQuotes = "Quotes:\n"
   let curTokens = 0;
   let articleTokens = 0;
   
   for (let i = 0; i < articleChunks.length; ++i) {
-    let totalTokens = articleChunks[i].infoTokens + articleChunks[i].factsTokens;
+    let totalTokens = articleChunks[i].infoTokens + articleChunks[i].factsTokens + articleChunks[i].quotesTokens;
     articleTokens += totalTokens;
     let test = curTokens + totalTokens;
     if (test <= maxPartTokens) {
       curFacts += `${articleChunks[i].info.trim()}\n${articleChunks[i].factList}`;
+      curQuotes += articleChunks[i].quoteList ? articleChunks[i].quoteList + "\n" : '';
       curTokens += totalTokens;
     } else {
-      articleParts.push({facts: curFacts, tokens: curTokens});
+      articleParts.push({facts: curFacts, tokens: curTokens, quotes: curQuotes});
       curFacts = `Facts:\n${articleChunks[i].info.trim()}\n${articleChunks[i].factList}`;
+      curQuotes = articleChunks[i].quoteList ? "Quotes:\n" +  articleChunks[i].quoteList + "\n" : "Quotes:\n";
       curTokens = totalTokens;
     }
   }
 
-  if (curFacts) articleParts.push({facts: curFacts, tokens: curTokens});
+  if (curFacts) articleParts.push({facts: curFacts, tokens: curTokens, quotes: curQuotes});
 
-  // console.log("ARTICLE PARTS", articleParts);
   // console.log("ARTICLE TOKENS", articleTokens);
 
   const mergedArticle = { content: ''}; 
@@ -1034,7 +1104,7 @@ const processMix = async (mix, socket) => {
     * It's time to merge the parts into a single article
     */
 
-   console.log('awaiting merge')
+   console.log('awaiting merge', articleParts);
 
    mergedArticle.content = await mergeArticleParts(articleParts, mix.topic);
    socket.emit('progress', {current: 7, max: 10});
@@ -1083,7 +1153,7 @@ const processMix = async (mix, socket) => {
     mergedArticle.withSubheadings = paragraphs.join('');
   }
 
-  mergedArticle.withSubheadings = linkifyQuotes(mergedArticle.withSubheadings, mix.content);
+  //mergedArticle.withSubheadings = linkifyQuotes(mergedArticle.withSubheadings, mix.content);
 
   socket.emit('progress', {current: 8, max: 10});
 
@@ -1096,6 +1166,9 @@ const processMix = async (mix, socket) => {
   curArticle = attachLinksUsed(curArticle, linksUsed);
 
   socket.emit('rawArticle', {rawArticle: curArticle});
+
+  const q = `INSERT INTO wordpress_articles (id, article, settings) VALUES ("${uuidv4()}", ${mysql.escape(curArticle)}, ${mysql.escape(JSON.stringify(mix))})`;
+  await query(q);
 
   socket.emit('progress', {current: 10, max: 10});
 
@@ -1913,10 +1986,34 @@ const processMixLinks = async (mix, socket) => {
 }
 
 const handleUpload = async (upload, socket) => {
-  const {article, title, titles, tags, login } = upload;
+  const {article, title, titles, tags, login, content, topic, output, html} = upload;
   const { username, password } = login;
+  
+  const settings = {
+    title,
+    titles,
+    tags,
+    login,
+    content,
+    topic,
+    output,
+    html
+  }
 
-  await wp.createPost (`delta.pymnts.com`, username, password, title, article, tags, titles, 'draft', socket);
+  try {
+    const id = await wp.createPost (`delta.pymnts.com`, username, password, title, article, tags, titles, 'draft', socket);
+  
+    const q = `INSERT INTO wordpress_articles (id, article, settings) VALUES ("wp-${id}", ${mysql.escape(article)}, ${mysql.escape(JSON.stringify(settings))})`;
+
+    const result = await query(q);
+
+    console.log('db result', result);
+
+  } catch (err) {
+    console.error (err);
+
+  }
+
 }
 
 // const processMixLinksAndQuotes = async (mix, socket) => {

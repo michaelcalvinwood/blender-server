@@ -1,4 +1,4 @@
-const debug = true;
+const debug = false;
 
 require('dotenv').config();
 
@@ -49,7 +49,7 @@ async function turboChatCompletion (prompt, temperature = 0, service = 'You are 
 
 
 exports.getTurboResponse = async (prompt, temperature = 0, debugMe = false, service = 'You are a helpful, accurate assistant.') => {
-    if (debugMe) console.log('TURBO', prompt);
+    if (debug) console.log('TURBO', prompt);
 
     if (!prompt.endsWith("\n")) prompt += "\n";
 
@@ -85,7 +85,7 @@ exports.getTurboResponse = async (prompt, temperature = 0, debugMe = false, serv
         content: result.data.choices[0].message.content
     }
 
-    if (debugMe) console.log(response);
+    if (debug) console.log(response);
 
     return response;
 }
@@ -117,9 +117,8 @@ exports.getDivinciResponse = async (prompt, output = 'text', temperature = .7, d
 
     while (!success) {
         try {
-            console.log('Fetching Divinci response');
             response = await axios(request);
-            console.log('Got Divinci response');
+            if (debugMe) console.log(response.data);
             success = true;
             
         } catch (err) {
@@ -135,11 +134,11 @@ exports.getDivinciResponse = async (prompt, output = 'text', temperature = .7, d
         }
     }
 
-    if (output === 'text') return response.data.choices[0].text;
+    if (output === 'text') return response.data.choices[0].text.replaceAll('“', '"').replaceAll('”', '"');
 
     let json;
     try {
-        json = JSON.parse(response.content.replaceAll("\n", ""));
+        json = JSON.parse(response.data.choices[0].text.replaceAll("\n", "").replaceAll('“', '"').replaceAll('”', '"'));
     } catch (err) {
         return false;
     }
