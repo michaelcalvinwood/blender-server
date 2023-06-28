@@ -246,7 +246,7 @@ const extractUrlText = async (mix, index) => {
       text = '';
     }
 
-    mix.content[index].text = text.replaceAll('“', '"');
+    mix.content[index].text = text.replaceAll('“', '"').replaceAll('”', '"');
       
 }
 
@@ -405,9 +405,18 @@ const mergeArticleParts = async (articleParts, topic) => {
 const getQuote = info => {
   const { speaker, affiliation, quote } = info;
 
-  if (speaker && affiliation) return `${speaker}, ${affiliation}, states: ${quote}`;
-  if (speaker) return `${speaker} states: ${quote}`;
-  if (affiliation) return `${affiliation} states: ${quote}`;
+  if (speaker && affiliation) return `${speaker}, ${affiliation}, states: "${quote}"`;
+  if (speaker) return `${speaker} states: "${quote}"`;
+  if (affiliation) return `${affiliation} states: "${quote}"`;
+  return '';
+}
+
+const getQuote2 = info => {
+  const { speaker, affiliation, quote } = info;
+
+  if (speaker && affiliation) return `${speaker}, ${affiliation}, states: "${quote}"`;
+  if (speaker) return `${speaker} states: "${quote}"`;
+  if (affiliation) return `${affiliation} states: "${quote}"`;
   return '';
 }
 
@@ -422,9 +431,6 @@ const addSubheadings = async (mergedArticle, html, info) => {
       if (quote) quoteList.push(quote);
     }
   }
-
-
-
   console.log('addSubheadings quotes', quotes);
   
   let use = [];
@@ -491,7 +497,15 @@ const getFactsTokens = part => {
     if (factLink !== false) factLinks.push(factLink);
   }
 
-  //console.log(factLinks);
+  for (let i = 0; i < part.quotes.length; ++i) {
+    const quote = getQuote(part.quotes[i]);
+    console.log('QUOTE', quote);
+    factList.push(quote);
+    //const factLink = getFactLink(quote, part.keyFacts[i].keywords, `http://c.co?n=${part.num}`);
+    //if (factLink !== false) factLinks.push(factLink);
+  }
+
+  console.log('FACTLIST', factList);
 
   part.factList = factList.join("\n");
   part.factsTokens = nlp.numGpt3Tokens(part.factList);
@@ -628,7 +642,7 @@ const textIsNotRelevant = text => {
 
 const filterPymntsText = text => {
   
-  text = text.replaceAll('The article', 'PYMNTS').replaceAll('in the article', 'according to PYMNTS').replaceAll('the article', 'PYMNTS');
+  text = text.replaceAll('The article', 'PYMNTS').replaceAll('in the article', 'according to PYMNTS').replaceAll('the article', 'PYMNTS').replaceAll('The document', 'PYMNTS');
 
   return text;
   
@@ -758,7 +772,12 @@ const sendTagsAndTitles = async (article, socket) => {
 const extractQuote = (sentence, loc) => {
   const loc2 = sentence.indexOf('"', loc + 1);
   if (loc2 === -1) return false;
-  return sentence.substring(loc, loc2+1);
+  let quote = sentence.substring(loc+1, loc2);
+
+  if (quote.endsWith(',')) quote = quote.substring(0, quote.length -1);
+  if (quote.endsWith('.')) quote = quote.substring(0, quote.length -1);
+  
+  return quote;
 }
 
 const findQuoteInChunks = (quote, chunks) => {
@@ -773,35 +792,47 @@ const findQuoteInChunks = (quote, chunks) => {
   return false;
 }
 
-const linkifyQuote = (sentence, chunks) => {
+const linkifiedSentence = (sentence, quote, url) => {
+  return 'LINKIFIED SENTENCE';
+}
+
+const linkifyQuote = (sentence, content) => {
   console.log('LINKIFY', sentence);
-  const loc = sentence.indexOf('"');
+  let loc = sentence.indexOf('"');
   const quote = extractQuote(sentence, loc);
-  console.log('quote', quote);
-  const chunk = findQuoteInChunks(quote, chunks);
-  console.log('chunk', chunk);
-  if (chunk === false) {
-    // remove quotes here
-  } else {
-    const { url } = chunk.url;
-    console.log('url', url);
+  console.log('quote', quote);   
+  if (quote === false) return sentence;
+
+  for (let i = 0; i < content.length; ++i) {
+    let { url, text } = content[i];
+    text = text.toLowerCase();
+    loc = text.indexOf(quote.toLowerCase());
+    if (loc !== -1) {
+      console.log('URL', url);
+      return linkifiedSentence(sentence, quote, url)
+    }
   }
+  /*
+   STRIP QUOTES HERE
+  */
+
+  return sentence;
 }
 
 const linkifyQuotes = (article, content) => {
   console.log('ARTICLE', article);
   console.log('CONTENT', JSON.stringify(content, null, 4));
-
-  return;
-
   const sentences = nlp.getSentences(article);
   for (let i = 0; i < sentences.length; ++i) {
     const sentence = sentences[i];
     const test = sentence.indexOf('"');
     if (test === -1) continue;
-    sentences[i] = linkifyQuote(sentence, chunks);
+    sentences[i] = linkifyQuote(sentence, content);
   }
 
+  console.log('SENTENCES', sentences);
+  
+  return sentences.join(' ');
 }
 
 
@@ -901,6 +932,8 @@ const processMix = async (mix, socket) => {
 
   for (let i = 0; i < articleChunks.length; ++i) getFactsTokens(articleChunks[i]);
   socket.emit('progress', {current: 4, max: 10});
+
+  return;
 
   /*
    * Sort the article chunks by total tokens needed ascending
@@ -1052,8 +1085,6 @@ const processMix = async (mix, socket) => {
 
   mergedArticle.withSubheadings = linkifyQuotes(mergedArticle.withSubheadings, mix.content);
 
-  return;
-  
   socket.emit('progress', {current: 8, max: 10});
 
   //console.log('MERGED ARTICLE', mergedArticle);
