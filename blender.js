@@ -1,4 +1,5 @@
-const listenPort = 6256;
+let listenPort = 6256;
+listenPort = 6257;
 const hostname = 'blender.pymnts.com'
 const privateKeyPath = `/etc/letsencrypt/live/${hostname}/privkey.pem`;
 const fullchainPath = `/etc/letsencrypt/live/${hostname}/fullchain.pem`;
