@@ -47,7 +47,6 @@ async function turboChatCompletion (prompt, temperature = 0, service = 'You are 
     return axios(request);
 }
 
-
 exports.getTurboResponse = async (prompt, temperature = 0, debugMe = false, service = 'You are a helpful, accurate assistant.') => {
     if (debug) console.log('TURBO', prompt);
 
@@ -89,6 +88,89 @@ exports.getTurboResponse = async (prompt, temperature = 0, debugMe = false, serv
 
     return response;
 }
+
+
+async function gpt4Completion (prompt, temperature = 0, service = 'You are a helpful, accurate assistant.') {
+    /* 
+     * NO NEED TO SPECIFY MAX TOKENS
+     * role: assistant, system, user
+     */
+
+    const request = {
+        url: 'https://api.openai.com/v1/chat/completions',
+        method: 'post',
+        headers: {
+            'Authorization': `Bearer ${process.env.PYMNTS_OPENAI_KEY}`,
+        },
+        data: {
+            model: "gpt-4",
+            temperature,
+            messages:[
+                {
+                    role: 'system',
+                    content: service,
+
+                },
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ]
+        }
+    }
+
+    return axios(request);
+}
+
+exports.getGPT4Response = async (prompt, temperature = 0, debugMe = false, service = 'You are a helpful, accurate assistant.') => {
+    if (debug) console.log('TURBO', prompt);
+
+    if (!prompt.endsWith("\n")) prompt += "\n";
+
+    let result;
+    let success = false;
+    let count = 0;
+    let seconds = 3;
+    let maxCount = 10;
+    while (!success) {
+        try {
+            result = await gpt4Completion(prompt, temperature, service);
+            success = true;
+        } catch (err) {
+            console.error("axios err.data", err.response.status, err.response.statusText, err.response.data);
+            ++count;
+            if (count >= maxCount || err.response.status === 400) {
+                console.log("STATUS 400 EXIT");
+                return {
+                    status: 'error',
+                    number: err.response.status,
+                    message: err.response,
+                }
+            }
+            seconds *= 2;
+            await sleep(seconds);
+            console.log('Retrying query:', prompt);
+        }
+    }
+
+    const response = {
+        status: 'success',
+        finishReason: result.data.choices[0].finish_reason,
+        content: result.data.choices[0].message.content
+    }
+
+    if (debug) console.log(response);
+
+    return response;
+}
+
+const testMe = async () => {
+    const result = await this.getGPT4Response('What color is the sky?');
+    console.log(result);
+}
+
+testMe();
+
 
 exports.getDivinciResponse = async (prompt, output = 'text', temperature = .7, debugMe = false) => {
     const numPromptTokens = nlp.numGpt3Tokens(prompt);
@@ -145,6 +227,8 @@ exports.getDivinciResponse = async (prompt, output = 'text', temperature = .7, d
 
     return json;
 }
+
+
 
 const dTest = async () => {
     prompt = `"""Below is some Content and FactLinks. Using 692 words, rewrite the content using HTML by incorporating 5 FactLinks verbatim, as-is.
