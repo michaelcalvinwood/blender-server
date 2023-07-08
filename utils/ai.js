@@ -9,11 +9,27 @@ const nlp = require('./nlp');
 
 const { Configuration, OpenAIApi } = require("openai");
 
+
+
+
 const configuration = new Configuration({
     apiKey: process.env.PYMNTS_OPENAI_KEY,
   });
 const openai = new OpenAIApi(configuration);
 const sleep = seconds => new Promise(r => setTimeout(r, seconds * 1000));
+
+/*
+ * top_p: what percentage of the top tokens to consider when formulating an answer
+ *      Default: 1
+ *      0.3 means only consider the top 30% by mass // should not use less than this
+ * temperature: Adjusts the way that remaining tokens are handle (the tokens that remain after top_p is applied)
+ *      1: The percentage chance of a token being selected is proportional to its probability of matching the query
+ *      0: Only the top most token will be chosen. A lower setting than 1 increasingly excludes lower probability tokens from being selected.
+ *      0.9: Great for creative applications; whereas 0 is good for greater accuracy
+ *      2: Now every token has an equal probability score, meaning that every token has an equal chance of being selected
+ * n: The number of responses that you want.
+ *      Important: Make sure the temperature is not at 0 otherwise all the responses will be the same
+ */
 
 async function turboChatCompletion (prompt, temperature = 0, service = 'You are a helpful, accurate assistant.') {
     /* 
