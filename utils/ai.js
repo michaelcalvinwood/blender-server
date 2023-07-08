@@ -9,7 +9,24 @@ const nlp = require('./nlp');
 
 const { Configuration, OpenAIApi } = require("openai");
 
-
+const openAIModels = [
+    {
+        id: 'gpt-3.5-turbo',
+        maxTokens: '4k'
+    },
+    {
+        id: 'gpt-4',
+        maxTokens: '8k'
+    },
+    {
+        id: 'gpt-3.5-turbo-16k',
+        maxTokens: '16k'
+    },
+    {
+        id: 'gpt-4-32k',
+        maxTokens: '32k'
+    }
+]
 
 
 const configuration = new Configuration({
@@ -30,6 +47,68 @@ const sleep = seconds => new Promise(r => setTimeout(r, seconds * 1000));
  * n: The number of responses that you want.
  *      Important: Make sure the temperature is not at 0 otherwise all the responses will be the same
  */
+
+exports.openAIGenericChatCompletion = async (prompt, model, temperature = .9, top_p = 1, service = 'You are a helpful assistant', maxRetries = 10) => {
+    const request = {
+        url: 'https://api.openai.com/v1/chat/completions',
+        method: 'post',
+        headers: {
+            'Authorization': `Bearer ${process.env.PYMNTS_OPENAI_KEY}`,
+        },
+        data: {
+            model,
+            temperature,
+            top_p,
+            messages:[
+                {
+                    role: 'system',
+                    content: service,
+
+                },
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ]
+        }
+    }
+
+    let success = false;
+    let count = 0;
+    let seconds = 3;
+
+    while (!success) {
+        try {
+            result = await axios(request);
+            success = true;
+        } catch (err) {
+            console.error("axios err.data", err.response.status, err.response.statusText, err.response.data);
+            ++count;
+            if (count >= maxRetries || err.response.status === 400) {
+                console.log("STATUS 400 EXIT");
+                return {
+                    status: 'error',
+                    number: err.response.status,
+                    message: err.response,
+                }
+            }
+            seconds *= 2;
+            console.error(`${model} is busy. Sleeping now.`)
+            await sleep(seconds);
+            console.error(`Retrying query for ${model}`);
+        }
+    }
+
+    const response = {
+        status: 'success',
+        finishReason: result.data.choices[0].finish_reason,
+        content: result.data.choices[0].message.content
+    }
+
+    if (debug) console.log(response);
+
+    return response;
+}
 
 async function turboChatCompletion (prompt, temperature = 0, service = 'You are a helpful, accurate assistant.') {
     /* 
@@ -181,7 +260,7 @@ exports.getGPT4Response = async (prompt, temperature = 0, debugMe = false, servi
 }
 
 const testMe = async () => {
-    const result = await this.getGPT4Response('What color is the sky?');
+    const result = await exports.openAIGenericChatCompletion('What color is the sky?', openAIModels[3].id);
     console.log(result);
 }
 
