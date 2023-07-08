@@ -82,14 +82,14 @@ exports.openAIGenericChatCompletion = async (prompt, model, temperature = .9, to
             result = await axios(request);
             success = true;
         } catch (err) {
-            console.error("axios err.data", err.response.status, err.response.statusText, err.response.data);
+            console.error("axios err.data", err.response.status, err.response.statusText);
             ++count;
-            if (count >= maxRetries || err.response.status === 400) {
+            if (count >= maxRetries || (err.response.status >= 400 && err.response.status <= 499) ) {
                 console.log("STATUS 400 EXIT");
                 return {
                     status: 'error',
                     number: err.response.status,
-                    message: err.response,
+                    message: err.response.statusText,
                 }
             }
             seconds *= 2;
