@@ -441,6 +441,10 @@ prompt = `"""Below are ${articleParts.length} Articles which may contain quotes.
 
 ${articles}"""
 `
+prompt = `"""Below are ${articleParts.length} Articles which may contain quotes. Using 1100 words, combine the information and quotes in these articles to write a highly dynamic and engaging article about the following topic: ${topic}. Be sure that the returned content utilizes every quote verbatim.
+
+${articles}"""
+`
   }
 
   return await ai.getDivinciResponse(prompt, 'text', 1, true);
@@ -810,10 +814,11 @@ const sendTagsAndTitles = async (article, socket) => {
   News Article:
   ${article}\n"""\n`;
 
-  const tat = await ai.getChatJSON(prompt);
+  let tat = await ai.getChatJSON(prompt);
 
+  if (tat === false) tag = [];
   console.log('TAGSANDTITLES', tat);
-
+  
   socket.emit('tagsAndTitles', tat);
 }
 
@@ -945,7 +950,7 @@ const processMix = async (mix, socket) => {
    */
   for (let i = 0; i < mix.content.length; ++i) {
     if (!mix.content[i].text) mix.content[i].chunks = [];
-    else mix.content[i].chunks = nlp.getTokenChunks(mix.content[i].text);
+    else mix.content[i].chunks = nlp.getTokenChunks(mix.content[i].text, 8000);
   }
 
   setTimeout(()=>{
@@ -1024,7 +1029,7 @@ const processMix = async (mix, socket) => {
    * Combine article chunks into article parts based on token size
    */
 
-  const maxPartTokens = 1750;
+  const maxPartTokens = 1750 * 4;
   const articleParts = [];
   let curFacts = "Facts:\n";
   let curQuotes = "Quotes:\n"

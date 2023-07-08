@@ -123,7 +123,7 @@ async function turboChatCompletion (prompt, temperature = 0, service = 'You are 
             'Authorization': `Bearer ${process.env.PYMNTS_OPENAI_KEY}`,
         },
         data: {
-            model: "gpt-3.5-turbo",
+            model: "gpt-3.5-turbo-16k",
             temperature,
             messages:[
                 {
@@ -138,6 +138,8 @@ async function turboChatCompletion (prompt, temperature = 0, service = 'You are 
             ]
         }
     }
+
+    console.log(request);
 
     return axios(request);
 }
@@ -264,7 +266,7 @@ const testMe = async () => {
     console.log(result);
 }
 
-testMe();
+//testMe();
 
 
 exports.getDivinciResponse = async (prompt, output = 'text', temperature = .7, debugMe = false) => {
@@ -373,6 +375,9 @@ const dTest = async () => {
 
 const getTurboJSON = async (prompt, temperature = .4) => {
     let response = await this.getTurboResponse(prompt, temperature);
+
+    console.log('PROMPT', prompt);
+    console.log('RESPONSE', response);
 
     if (response.status === 'error') return false;
 
