@@ -1166,7 +1166,7 @@ const processMix = async (mix, socket) => {
   //console.log('MERGED ARTICLE', mergedArticle);
   sendTagsAndTitles(mergedArticle.withSubheadings, socket);
 
-  let curArticle = await attachPymnts(mergedArticle.withSubheadings);
+  let curArticle = mix.output.pymntsConnector ? await attachPymnts(mergedArticle.withSubheadings) : mergedArticle.withSubheadings;
   socket.emit('progress', {current: 9, max: 10});
 
   curArticle = attachLinksUsed(curArticle, linksUsed);
