@@ -230,6 +230,7 @@ const getPymntsSummariesForTopics = async (topics, numParagraphs = 2, numWriteup
 
 const extractUrlText = async (mix, index) => {
   const url = mix.content[index].url;
+  console.log('extractUrlText url', url);
 
   const urlType = urlUtils.urlType(url);  // later add function here to get the type
 
@@ -292,6 +293,7 @@ const extractText = async mix => {
         break;
       default:
         console.error('extractText unknown type', mix.content[i].type);
+        //console.log(JSON.stringify(mix.content[i], null, 4))
         mix.content[i].text = '';
     }
   }
@@ -944,6 +946,15 @@ const processMix = async (mix, socket) => {
   socket.emit('text', mix.content);
   socket.emit('msg', {status: 'success', msg: ''});
   socket.emit('progress', {current: 1, max: 10});
+
+  let totalTextLength = 0;
+  for (let i = 0; i < mix.content.length; ++i) totalTextLength += mix.content[i].text.length > 100 ? mix.content[i].text.length : 0;
+
+  if (!totalTextLength) return socket.emit('msg', {status: 'error', msg: 'Failed to get text'});
+
+  console.log(JSON.stringify(mix, null, 4));
+
+  return;
 
   /*
    * split text into chunks
