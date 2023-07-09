@@ -238,6 +238,7 @@ const extractUrlText = async (mix, index) => {
 
   switch (urlType) {
     case 'html':
+    case 'htm':
       const html = await urlUtils.getHTML(url);
       const article = await urlUtils.extractArticleFromHTML(html);
       text = urlUtils.getTextFromHTML(article);
@@ -951,10 +952,6 @@ const processMix = async (mix, socket) => {
   for (let i = 0; i < mix.content.length; ++i) totalTextLength += mix.content[i].text.length > 100 ? mix.content[i].text.length : 0;
 
   if (!totalTextLength) return socket.emit('msg', {status: 'error', msg: 'Failed to get text'});
-
-  console.log(JSON.stringify(mix, null, 4));
-
-  return;
 
   /*
    * split text into chunks
