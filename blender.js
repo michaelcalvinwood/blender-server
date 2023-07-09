@@ -111,7 +111,10 @@ app.get('/', (req, res) => {
  */
 
 const sendSeeds = async socket => {
-
+  const q = `SELECT * FROM seeds ORDER BY id DESC LIMIT 200`;
+  const r = await query(q);
+  //console.log('r', r);
+  if (r !== false) socket.emit('seeds', r);
 }
 
 const getTopics = async (text, num = 5) => {
