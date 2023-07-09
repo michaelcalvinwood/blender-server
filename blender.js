@@ -240,7 +240,9 @@ const extractUrlText = async (mix, index) => {
     case 'html':
     case 'htm':
       const html = await urlUtils.getHTML(url);
+      console.log(`html length ${html ? html.length : 0}: ${url}`)
       const article = await urlUtils.extractArticleFromHTML(html);
+      console.log(`article length ${article ? article.length : 0}: ${url}`);
       text = urlUtils.getTextFromHTML(article);
       /*
        * TODO: If article === false email Michael with URL

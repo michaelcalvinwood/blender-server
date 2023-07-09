@@ -67,12 +67,15 @@ exports.extractArticleFromHTML = async (html, url = '') => {
     if (url) article =  await articleExtractor.extractFromHtml(html, url);
     else article = await articleExtractor.extractFromHtml(html);
 
+    console.log('utils/url.js extractArticleFromHTML article length', article ? article.length : 0);
+
     if (article && article.title && article.content) return `<h1>${article.title}</h1>\n${article.content}`;
 
-    return '';
+    return html;
 }
 
 exports.getTextFromHTML = html => {
+  console.log('utils/urls.js getTextFromHTML');
   const options = {
       selectors: [
         { selector: 'a', options: { ignoreHref: true } },
@@ -81,14 +84,21 @@ exports.getTextFromHTML = html => {
     }
     
     let text = convert(html, options);
-    let lines = text.split("\n");
-    for (let i = 0; i < lines.length; ++i) {
-      if (lines[i]) lines[i] = lines[i].trim();
-      else lines[i] = "\n";
+    
+    if (text) {
+      let lines = text.split("\n");
+      for (let i = 0; i < lines.length; ++i) {
+        if (lines[i]) lines[i] = lines[i].trim();
+        else lines[i] = "\n";
+      }
+      text = lines.join(' ');
+  
+      return text;
     }
-    text = lines.join(' ');
 
-    return text;
+    return '';
+
+    
 }
 
 exports.articleExtractor = async (url, html = false) => {
