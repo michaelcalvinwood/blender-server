@@ -2,6 +2,9 @@ require('dotenv').config();
 const axios = require('axios');
 const cheerio = require('cheerio');
 const articleExtractor = require('@extractus/article-extractor');
+const HTMLParser = require('node-html-parser');
+const h2p = require('html2plaintext')
+
 const fs = require('fs');
 
 const { convert } = require('html-to-text');
@@ -75,7 +78,7 @@ exports.extractArticleFromHTML = async (html, url = '') => {
 }
 
 exports.getTextFromHTML = html => {
-  console.log('utils/urls.js getTextFromHTML');
+  console.log('utils/urls.js getTextFromHTML html length', html ? html.length : 0 );
   const options = {
       selectors: [
         { selector: 'a', options: { ignoreHref: true } },
@@ -84,7 +87,7 @@ exports.getTextFromHTML = html => {
     }
     
     let text = convert(html, options);
-    
+    console.log('utils/urls.js getTextFromHTML text length', text ? text.length : 0 );
     if (text) {
       let lines = text.split("\n");
       for (let i = 0; i < lines.length; ++i) {
@@ -95,6 +98,14 @@ exports.getTextFromHTML = html => {
   
       return text;
     }
+
+
+    // console.log(html);
+    // let test = h2p(html);
+    // console.log('test', test);
+
+    // let test = HTMLParser.parse(html);
+    // console.log('test', test.text);
 
     return '';
 

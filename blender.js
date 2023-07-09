@@ -1,5 +1,5 @@
 let listenPort = 6256;
-listenPort = 6257;
+//listenPort = 6257;
 const hostname = 'blender.pymnts.com'
 const privateKeyPath = `/etc/letsencrypt/live/${hostname}/privkey.pem`;
 const fullchainPath = `/etc/letsencrypt/live/${hostname}/fullchain.pem`;
@@ -15,6 +15,7 @@ const { v4: uuidv4 } = require('uuid');
 const cheerio = require('cheerio');
 const mysql = require('mysql2');
 
+const s3 = require('./utils/s3');
 const urlUtils = require('./utils/url');
 const wp = require('./utils/wordpress');
 const ai = require('./utils/ai');
@@ -75,6 +76,30 @@ const handleLogin = async (req, res) => {
   res.status(200).json(token);
 }
 
+const processSeed = async (req, res) => {
+  const { article, url, title, altTitle } = req.body;
+
+  const fileName = `seed--${uuidv4()}.html`;
+  let link = await s3.uploadHTML(article, 'seeds', fileName);
+  
+  if (!link) return res.status(500).json('internal server error');
+
+  const q = `INSERT INTO seeds (url, link, title, article) VALUES ('${url}', '${link}', ${mysql.escape(title ? title : altTitle)}, ${mysql.escape(article)})`;
+  let result;
+
+  try {
+      result = await query(q);
+  } catch (err) {
+      console.error('processSeed error', err);
+      return res.status(500).json("mysql error");
+  }
+  
+  res.status(200).json({fileName});
+}
+
+
+app.post('/seed', (req, res) => processSeed(req, res));
+
 app.post('/login', (req, res) => handleLogin(req, res));
 
 app.get('/', (req, res) => {
@@ -84,6 +109,10 @@ app.get('/', (req, res) => {
 /*
  * Socket Functions
  */
+
+const sendSeeds = async socket => {
+
+}
 
 const getTopics = async (text, num = 5) => {
   const prompt = `'''Provide a list of of the  ${num === 1 ? 'most significant topic' : `${num} most significant topics`} contained in the following text. The returned format must be stringified JSON in the following format: {
@@ -2173,6 +2202,8 @@ const handleUpload = async (upload, socket) => {
 //   console.log('REFINED ARTICLE', refinedArticle);
 // }
 
+
+
 const handleSocketEvents = async socket => {
   socket.on('mix', mix => {
     const { html } = mix;
@@ -2181,6 +2212,10 @@ const handleSocketEvents = async socket => {
   })
 
   socket.on('upload', upload => handleUpload(upload, socket));
+
+  socket.join('seeds');
+
+  sendSeeds(socket);
 
   //socket.on('mix', (mix) => processMixLinks(mix, socket))
   //socket.on('mix', (mix) => processMix(mix, socket))
