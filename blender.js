@@ -75,9 +75,20 @@ const handleLogin = async (req, res) => {
 
   res.status(200).json(token);
 }
-
+const sendSeeds = async () => {
+  const q = `SELECT * FROM seeds ORDER BY id DESC LIMIT 200`;
+  const r = await query(q);
+  //console.log('r', r);
+  if (r !== false) {
+    io.emit('seeds', r);
+  }
+}
 const processSeed = async (req, res) => {
-  const { article, url, title, altTitle } = req.body;
+  let { article, url, title, altTitle, body } = req.body;
+
+  //console.log('body', body);
+
+  if (body) article = body;
 
   const fileName = `seed--${uuidv4()}.html`;
   let link = await s3.uploadHTML(article, 'seeds', fileName);
@@ -93,7 +104,7 @@ const processSeed = async (req, res) => {
       console.error('processSeed error', err);
       return res.status(500).json("mysql error");
   }
-  
+  sendSeeds();
   res.status(200).json({fileName});
 }
 
@@ -110,12 +121,7 @@ app.get('/', (req, res) => {
  * Socket Functions
  */
 
-const sendSeeds = async socket => {
-  const q = `SELECT * FROM seeds ORDER BY id DESC LIMIT 200`;
-  const r = await query(q);
-  //console.log('r', r);
-  if (r !== false) socket.emit('seeds', r);
-}
+
 
 const getTopics = async (text, num = 5) => {
   const prompt = `'''Provide a list of of the  ${num === 1 ? 'most significant topic' : `${num} most significant topics`} contained in the following text. The returned format must be stringified JSON in the following format: {
