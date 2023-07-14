@@ -784,7 +784,7 @@ const attachPymnts = async (article) => {
         const { topic, content } = result[i];
         console.log(topic, content);
         let num = 0;
-        section = `<h3>PYMNTS on ${topic.replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase())}</h3>`
+        section = `<h3>More on ${topic.replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase())}</h3>`
         console.log('SECTION H2', section);
         for (let j = 0; j < content.length; ++j) {
           let { text, url } = content[j];
