@@ -859,7 +859,11 @@ const sendTagsAndTitles = async (article, socket) => {
 
   let tat = await ai.getChatJSON(prompt);
 
-  if (tat === false) tag = [];
+  if (tat === false) tag = {
+    titles: [],
+    tags: [],
+    conclusion: ''
+  }
   console.log('TAGSANDTITLES', tat);
   
   socket.emit('tagsAndTitles', tat);
