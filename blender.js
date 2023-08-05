@@ -275,6 +275,8 @@ const extractUrlText = async (mix, index) => {
   let text, fileName;
 
   switch (urlType) {
+    case 'php':
+    case 'aspx':
     case 'html':
     case 'htm':
       const html = await urlUtils.getHTML(url);
@@ -302,7 +304,7 @@ const extractUrlText = async (mix, index) => {
         text = '';
       }
       break;
-      case 'pdf':
+    case 'pdf':
         fileName = `/home/tmp/${uuidv4()}.pdf`;
         try {
           await urlUtils.download(url, fileName);
@@ -1033,6 +1035,8 @@ const processMix = async (mix, socket) => {
 
   let num = 0;
 
+  const quoteList = [];
+
   for (let i = 0; i < mix.content.length; ++i) {
     for (let j = 0; j < mix.content[i].info.length; ++j) {
       if (mix.content[i].info[j].info) {
@@ -1048,6 +1052,11 @@ const processMix = async (mix, socket) => {
           keyFacts: mix.content[i].info[j].facts,
           quotes: mix.content[i].info[j].quotes,
           infoTokens: nlp.numGpt3Tokens(mix.content[i].info[j].info),
+        })
+
+        quoteList.push({
+          url: mix.content[i].url,
+          quotes: mix.content[i].info[j].quotes
         })
       }
     }
@@ -1106,7 +1115,7 @@ const processMix = async (mix, socket) => {
 
   if (curFacts) articleParts.push({facts: curFacts, tokens: curTokens, quotes: curQuotes});
 
-  // console.log("ARTICLE TOKENS", articleTokens);
+  console.log("QUOTE LIST", JSON.srintify(quoteList, null, 4));
 
   const mergedArticle = { content: ''}; 
 
@@ -1232,141 +1241,6 @@ const processMix = async (mix, socket) => {
 
 
   return;
-
-  mergedArticle.subheadings = extractSubheadingSections(mergedArticle.withSubheadings);
-
-  console.log(mergedArticle);
-
-  mergedArticle.expandedSubheadings = [];
-  promises = [];
-  for (let i = 0; i < mergedArticle.subheadings.length; ++i) {
-    promises.push(expandSubsection(mergedArticle, i, factLinks ));
-  }
-
-  console.log('awaiting expanding subsections', promises.length);
-  await Promise.all(promises);
-
-  console.log('MERGED ARTICLE WITH EXPANDED SUBHEADINGS', mergedArticle)
-
-  return;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  /*
-   * Write an article based on each part
-   */
-
-
-  const article = [];
-  promises = [];
-
-  switch (mix.output.type) {
-    case 'news':
-      outputType = 'news article';
-      break;
-    case 'blog':
-      outputType = 'blog post';
-      break;
-    case 'marketing':
-      outputType = 'marketing piece';
-      break;
-  }
-
-  for (let i = 0; i < articleParts.length; ++i) {
-    let location;
-    if (articleParts.length === 1) location = 'total';
-    else if (i === 0) location = 'beginning';
-    else if (i === articleParts.length - 1) location = 'end';
-    else location = 'middle';
-    promises.push(writeArticlePart(articleParts[i], mix.topic, outputType, articleParts, i, location));
-  }
-
-  console.log('waiting on article promises', promises.length);
-  await Promise.all(promises);
-
-  console.log('ARTICLE PARTS', articleParts);
-
-  /*
-   * Combine articles into one article to create the raw article
-   */
-
-  let combinedArticleParts = articleParts.join("\n");
-
-  console.log('COMBINED ARTICLE PARTS', combinedArticleParts);
-  socket.emit('rawArticle', {rawArticle: combinedArticleParts});
-
-  return;
-  console.log('article tokens', nlp.numGpt3Tokens(combinedArticleParts))
-
-  const firstH1 = combinedArticleParts.indexOf('<h1>');
-  if (firstH1 > -1) {
-    const secondH1 = combinedArticleParts.substring(firstH1+4).indexOf('<h1>');
-    console.log('h1s', firstH1, secondH1);
-    if (secondH1 > -1) {
-      const part1 = combinedArticleParts.substring(0, secondH1);
-      let part2 = combinedArticleParts.substring(secondH1);
-
-      part2 = part2.replaceAll('<h5>', '<h6>').replaceAll('</h5>', '</h6>');
-      part2 = part2.replaceAll('<h4>', '<h5>').replaceAll('</h4>', '</h5>');
-      part2 = part2.replaceAll('<h3>', '<h4>').replaceAll('</h3>', '</h4>');
-      part2 = part2.replaceAll('<h2>', '<h3>').replaceAll('</h2>', '</h3>');
-      part2 = part2.replaceAll('<h1>', '<h2>').replaceAll('</h1>', '</h2>');
-      
-      combinedArticleParts = part1 + part2;
-
-      console.log('COMBINED ARTICLE PARTS #2', combinedArticleParts);
-      socket.emit('rawArticle', {rawArticle: combinedArticleParts});
-    }
-  }
-
-  /*
-   * if more than one article part, remove introductions and conclusions
-   */
-  if (articleParts.length > 1) {
-    $ = cheerio.load(combinedArticleParts);
-    const headings = $('h1, h2, h3, h4, h5, h6');
-    $(headings).each((index, el) => {
-      const contents = $(el).text();
-      console.log('heading content', contents);
-      if (contents.toLowerCase() === 'introduction' || contents.toLowerCase() === 'conclusion') dom.removeSectionByHeading($, el);
-    })
-  }
-
-
-  //console.log("REMOVED", $.html());
-
-  /*  
-  
-  
-  add in quotes
-    linked quotes
-  
-  see if you can get the article generator to spit back the sources used.
-
-  in any case, attach recommended reading links
-  
-  */
-
-  // await writeArticle(mix);
-
-  // socket.emit('article', mix.content);
-  // socket.emit('msg', {status: 'success', msg: 'Final Article'});
 
 }
 
